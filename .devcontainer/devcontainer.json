@@ -13,7 +13,8 @@
       "extensions": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "ms-playwright.playwright"
+        "ms-playwright.playwright",
+        "GitHub.copilot"
       ],
       "settings": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",

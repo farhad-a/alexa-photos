@@ -10,7 +10,7 @@ const photoAssetSchema = z.object({
       fileSize: z.number(),
       width: z.number(),
       height: z.number(),
-    })
+    }),
   ),
   caption: z.string().optional(),
   dateCreated: z.string(),
@@ -32,22 +32,37 @@ export interface ICloudPhoto {
 
 export class ICloudClient {
   private baseUrl: string;
+  private albumToken: string;
 
   constructor(albumToken: string) {
-    // iCloud shared album API endpoint
-    this.baseUrl = `https://p${this.getPartition(albumToken)}-sharedstreams.icloud.com/${albumToken}/sharedstreams`;
+    this.albumToken = albumToken;
+    // Initial base URL - will be updated after partition discovery
+    this.baseUrl = `https://p01-sharedstreams.icloud.com/${albumToken}/sharedstreams`;
   }
 
-  private getPartition(token: string): string {
-    // Apple partitions shared albums across servers based on token
-    // This is a simplified version - may need adjustment
-    const firstChar = token.charAt(0).toUpperCase();
-    if (firstChar >= "A" && firstChar <= "M") return "01";
-    return "02";
+  private async discoverPartition(): Promise<void> {
+    // Apple returns 330 with X-Apple-MMe-Host header indicating correct partition
+    const res = await fetch(`${this.baseUrl}/webstream`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ streamCtag: null }),
+      redirect: "manual",
+    });
+
+    if (res.status === 330) {
+      const host = res.headers.get("X-Apple-MMe-Host");
+      if (host) {
+        this.baseUrl = `https://${host}/${this.albumToken}/sharedstreams`;
+        logger.debug({ host }, "Discovered iCloud partition");
+      }
+    }
   }
 
   async getPhotos(): Promise<ICloudPhoto[]> {
     logger.debug("Fetching photos from iCloud shared album");
+
+    // Discover correct partition first
+    await this.discoverPartition();
 
     // First, get the webstream metadata
     const webstreamRes = await fetch(`${this.baseUrl}/webstream`, {
@@ -91,7 +106,7 @@ export class ICloudClient {
           if (!prev || val.width > prev[1].width) return [key, val];
           return prev;
         },
-        null
+        null,
       );
 
       const [derivativeKey, derivative] = best || [null, null];
@@ -105,12 +120,30 @@ export class ICloudClient {
         width: derivative?.width || 0,
         height: derivative?.height || 0,
         caption: photo.caption,
-        dateCreated: new Date(parseInt(photo.dateCreated)),
+        dateCreated: this.parseAppleDate(photo.dateCreated),
       };
     });
 
     logger.info({ count: photos.length }, "Fetched photos from iCloud");
     return photos.filter((p) => p.url); // Only return photos with valid URLs
+  }
+
+  /**
+   * Parse date from iCloud API - can be ISO string or Apple timestamp
+   */
+  private parseAppleDate(dateValue: string | number): Date {
+    if (typeof dateValue === "string") {
+      // ISO date string like "2017-06-18T21:02:44Z"
+      const parsed = new Date(dateValue);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    // Fallback: Apple epoch (seconds since 2001-01-01)
+    const ts =
+      typeof dateValue === "string" ? parseFloat(dateValue) : dateValue;
+    const appleEpochOffset = 978307200;
+    return new Date((ts + appleEpochOffset) * 1000);
   }
 
   async downloadPhoto(photo: ICloudPhoto): Promise<Buffer> {

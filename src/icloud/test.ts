@@ -3,6 +3,7 @@
  * Run with: npm run icloud:test
  */
 
+import "dotenv/config";
 import { ICloudClient } from "./client.js";
 
 const albumToken = process.env.ICLOUD_ALBUM_TOKEN;

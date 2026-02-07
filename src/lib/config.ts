@@ -5,7 +5,7 @@ const configSchema = z.object({
   amazonEmail: z.string().email(),
   amazonPassword: z.string().min(1),
   amazonAlbumName: z.string().default("Echo Show"),
-  pollIntervalMs: z.coerce.number().default(60000),
+  pollIntervalMs: z.coerce.number().default(60).transform((s) => s * 1000),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -17,7 +17,7 @@ function loadConfig(): Config {
     amazonEmail: process.env.AMAZON_EMAIL,
     amazonPassword: process.env.AMAZON_PASSWORD,
     amazonAlbumName: process.env.AMAZON_ALBUM_NAME,
-    pollIntervalMs: process.env.POLL_INTERVAL_MS,
+    pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     logLevel: process.env.LOG_LEVEL,
   });
 }
