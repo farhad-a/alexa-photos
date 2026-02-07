@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
 # Install Playwright dependencies
+# Note: libasound2t64 is the new package name in Ubuntu 24.04+
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libnspr4 \
@@ -16,5 +17,5 @@ RUN apt-get update && apt-get install -y \
     libxfixes3 \
     libxrandr2 \
     libgbm1 \
-    libasound2 \
+    libasound2t64 \
     && rm -rf /var/lib/apt/lists/*

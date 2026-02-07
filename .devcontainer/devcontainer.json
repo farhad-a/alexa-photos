@@ -25,6 +25,5 @@
   "mounts": [
     "source=${localWorkspaceFolder}/data,target=/app/data,type=bind"
   ],
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "remoteUser": "node"
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
 }
