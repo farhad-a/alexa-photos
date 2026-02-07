@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+
+# Data (state + sessions)
+data/
+
+# Logs
+*.log
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# OS
+.DS_Store
