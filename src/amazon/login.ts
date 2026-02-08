@@ -31,7 +31,7 @@ async function ask(rl: readline.Interface, question: string): Promise<string> {
  * Handles `key=value; key2=value2` format (from DevTools "Copy as cURL"
  * or the Cookie request header).
  */
-function parseCookieString(raw: string): Record<string, string> {
+export function parseCookieString(raw: string): Record<string, string> {
   const cookies: Record<string, string> = {};
 
   for (const pair of raw.split(";")) {
@@ -49,7 +49,7 @@ function parseCookieString(raw: string): Record<string, string> {
  * Detect region from a parsed cookie map.
  * Returns the TLD (e.g. "com", "co.uk", "de") or null if undetectable.
  */
-function detectTld(cookies: Record<string, string>): string | null {
+export function detectTld(cookies: Record<string, string>): string | null {
   for (const key of Object.keys(cookies)) {
     if (key === "at-main" || key === "at_main") return "com";
     if (key.startsWith("at-acb")) return key.slice("at-acb".length);
@@ -60,7 +60,7 @@ function detectTld(cookies: Record<string, string>): string | null {
 /**
  * Extract only the cookies we need from a full cookie map.
  */
-function extractRequiredCookies(
+export function extractRequiredCookies(
   all: Record<string, string>,
   tld: string,
 ): { cookies: Record<string, string>; missing: string[] } {
@@ -228,4 +228,10 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+// Only run when executed directly (not when imported for tests)
+const isDirectRun =
+  process.argv[1]?.endsWith("login.ts") ||
+  process.argv[1]?.endsWith("login.js");
+if (isDirectRun) {
+  main().catch(console.error);
+}
