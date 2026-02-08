@@ -14,7 +14,9 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "icloud:test": "tsx src/icloud/test.ts",
-    "amazon:setup": "tsx src/amazon/login.ts"
+    "amazon:setup": "tsx src/amazon/login.ts",
+    "docker:build": "docker build -t alexa-photos:local .",
+    "docker:run": "docker run --rm -v ./data:/app/data --env-file .env alexa-photos:local"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

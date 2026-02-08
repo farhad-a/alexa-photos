@@ -6,6 +6,11 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false,
+      "installDockerBuildx": true,
+      "version": "latest"
     }
   },
   "customizations": {
@@ -22,6 +27,9 @@
     }
   },
   "postCreateCommand": "npm install",
-  "mounts": ["source=${localWorkspaceFolder}/data,target=/app/data,type=bind"],
+  "mounts": [
+    "source=${localWorkspaceFolder}/data,target=/app/data,type=bind",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
 }

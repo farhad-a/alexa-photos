@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+.gitea
+
+# Node
+node_modules
+npm-debug.log
+
+# Build artifacts
+dist
+coverage
+
+# Dev files
+.env
+.env.*
+
+# Data directory (should be mounted as volume)
+data
+
+# Documentation
+*.md
+!README.md
+
+# Dev container
+.devcontainer
+
+# Tests
+**/*.test.ts
+vitest.config.ts
+
+# CI/CD
+.github
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo

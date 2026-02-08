@@ -62,6 +62,25 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 
 ### Production Deployment
 
+Using pre-built Docker images from Gitea Container Registry:
+
+```bash
+# Pull latest release
+docker pull git.home.alaghband.com/farhad/alexa-photos:latest
+
+# Or use docker-compose.yml with registry image
+services:
+  sync:
+    image: git.home.alaghband.com/farhad/alexa-photos:latest
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+```
+
+Or build from source locally:
+
 ```bash
 # Build and run with Docker Compose
 docker compose up -d
@@ -70,7 +89,11 @@ docker compose up -d
 docker compose logs -f
 ```
 
+> **Release process:** See [RELEASE.md](RELEASE.md) for details on versioning, tagging, and automated builds.
+
 ## Commands
+
+### Development
 
 | Command                | Description                      |
 | ---------------------- | -------------------------------- |
@@ -79,6 +102,15 @@ docker compose logs -f
 | `npm run start`        | Run production build             |
 | `npm run icloud:test`  | Test iCloud album fetch          |
 | `npm run amazon:setup` | Save Amazon Photos cookies       |
+
+### Docker
+
+| Command                  | Description                       |
+| ------------------------ | --------------------------------- |
+| `npm run docker:build`   | Build Docker image locally        |
+| `npm run docker:run`     | Run locally built Docker image    |
+| `docker compose up -d`   | Build and run with Docker Compose |
+| `docker compose logs -f` | View service logs                 |
 
 ## CI / Testing
 
