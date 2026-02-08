@@ -36,7 +36,8 @@ src/
 
 - Set-based diffing: compare iCloud photo IDs vs stored mappings
 - Additions: download from iCloud → upload to Amazon → add to album → save mapping
-- Deletions: remove from album → trash → purge → remove mapping
+- Deletions (if `SYNC_DELETIONS=true`): remove from album → trash → purge → remove mapping
+- Append-only mode: `SYNC_DELETIONS=false` preserves all photos in Amazon, even when removed from iCloud
 - Guard against concurrent runs with `isRunning` flag
 - Lazy initialization — only creates Amazon client when sync work exists
 

@@ -23,6 +23,7 @@ vi.mock("../lib/config.js", () => ({
     icloudAlbumToken: "test-token",
     amazonCookiesPath: "./data/amazon-cookies.json",
     amazonAlbumName: "Echo Show",
+    syncDeletions: true,
     pollIntervalMs: 60000,
     logLevel: "info",
   },
@@ -210,6 +211,34 @@ describe("SyncEngine", () => {
       const removedIds = mock.deleteNodes.mock.calls[0][0].sort();
       expect(removedIds).toEqual(["az-1", "az-2"]);
       expect(mockMappings.size).toBe(0);
+    });
+
+    it("skips deletions when syncDeletions is false", async () => {
+      // Temporarily override config
+      const configModule = await import("../lib/config.js");
+      const originalSyncDeletions = configModule.config.syncDeletions;
+      (configModule.config as any).syncDeletions = false;
+
+      try {
+        mockMappings.set("old-photo", {
+          icloudId: "old-photo",
+          icloudChecksum: "chk",
+          amazonId: "az-old",
+        });
+
+        vi.spyOn(icloud, "getPhotos").mockResolvedValue([]);
+
+        await engine.run();
+
+        // Mapping should still exist (not deleted)
+        expect(mockMappings.has("old-photo")).toBe(true);
+
+        // Amazon client should not be initialized (no work to do)
+        expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+      } finally {
+        // Restore original value
+        (configModule.config as any).syncDeletions = originalSyncDeletions;
+      }
     });
   });
 

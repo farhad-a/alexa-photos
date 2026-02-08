@@ -9,6 +9,7 @@ dist/
 
 # Data (state + sessions)
 data/
+!data/.gitkeep
 
 # Logs
 *.log

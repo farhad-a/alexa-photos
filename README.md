@@ -80,13 +80,14 @@ docker compose logs -f
 
 ## Environment Variables
 
-| Variable                | Description                 | Default                      |
-| ----------------------- | --------------------------- | ---------------------------- |
-| `ICLOUD_ALBUM_TOKEN`    | Token from shared album URL | (required)                   |
-| `AMAZON_COOKIES_PATH`   | Path to cookies JSON file   | `./data/amazon-cookies.json` |
-| `AMAZON_ALBUM_NAME`     | Album name in Amazon Photos | `Echo Show`                  |
-| `POLL_INTERVAL_SECONDS` | Sync interval in seconds    | `60`                         |
-| `LOG_LEVEL`             | Logging level               | `info`                       |
+| Variable                | Description                               | Default                      |
+| ----------------------- | ----------------------------------------- | ---------------------------- |
+| `ICLOUD_ALBUM_TOKEN`    | Token from shared album URL               | (required)                   |
+| `AMAZON_COOKIES_PATH`   | Path to cookies JSON file                 | `./data/amazon-cookies.json` |
+| `AMAZON_ALBUM_NAME`     | Album name in Amazon Photos               | `Echo Show`                  |
+| `SYNC_DELETIONS`        | Delete from Amazon when removed from iCloud | `true`                       |
+| `POLL_INTERVAL_SECONDS` | Sync interval in seconds                  | `60`                         |
+| `LOG_LEVEL`             | Logging level                             | `info`                       |
 
 ## How It Works
 
@@ -94,8 +95,10 @@ docker compose logs -f
 2. **Compare State**: Checks local SQLite database for sync status
 3. **Sync Changes**:
    - New photos: Download from iCloud → Upload to Amazon Photos → Add to album
-   - Removed photos: Remove from album → Trash → Purge from Amazon Photos
+   - Removed photos (if `SYNC_DELETIONS=true`): Remove from album → Trash → Purge from Amazon Photos
 4. **Update State**: Record new mappings in database
+
+> **Append-only mode**: Set `SYNC_DELETIONS=false` to preserve all photos in Amazon Photos, even when removed from iCloud.
 
 ## Troubleshooting
 

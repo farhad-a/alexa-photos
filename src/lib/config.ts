@@ -4,6 +4,7 @@ const configSchema = z.object({
   icloudAlbumToken: z.string().min(1),
   amazonCookiesPath: z.string().default("./data/amazon-cookies.json"),
   amazonAlbumName: z.string().default("Echo Show"),
+  syncDeletions: z.coerce.boolean().default(true),
   pollIntervalMs: z.coerce
     .number()
     .default(60)
@@ -18,6 +19,7 @@ function loadConfig(): Config {
     icloudAlbumToken: process.env.ICLOUD_ALBUM_TOKEN,
     amazonCookiesPath: process.env.AMAZON_COOKIES_PATH,
     amazonAlbumName: process.env.AMAZON_ALBUM_NAME,
+    syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     logLevel: process.env.LOG_LEVEL,
   });

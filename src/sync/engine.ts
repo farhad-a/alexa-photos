@@ -52,7 +52,9 @@ export class SyncEngine {
       );
 
       // Initialize Amazon client only if we have work to do
-      if (toAdd.length > 0 || toRemove.length > 0) {
+      const needsAmazon =
+        toAdd.length > 0 || (toRemove.length > 0 && config.syncDeletions);
+      if (needsAmazon) {
         await this.ensureAmazonClient();
       }
 
@@ -61,9 +63,16 @@ export class SyncEngine {
         await this.addPhoto(photo);
       }
 
-      // Process removals
+      // Process removals (if enabled)
       if (toRemove.length > 0) {
-        await this.removePhotos(toRemove);
+        if (config.syncDeletions) {
+          await this.removePhotos(toRemove);
+        } else {
+          logger.info(
+            { count: toRemove.length },
+            "Skipping deletions (SYNC_DELETIONS=false)",
+          );
+        }
       }
 
       logger.info("Sync complete");
