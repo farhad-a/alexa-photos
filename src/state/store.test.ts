@@ -15,10 +15,8 @@ vi.mock("../lib/logger.js", () => ({
 // Override DB_PATH to use in-memory database
 vi.mock("better-sqlite3", async (importOriginal) => {
   const mod = await importOriginal<typeof import("better-sqlite3")>();
-  const DatabaseConstructor = mod.default as any;
   return {
-    ...mod,
-    default: class extends DatabaseConstructor {
+    default: class extends mod.default {
       constructor() {
         super(":memory:");
       }
