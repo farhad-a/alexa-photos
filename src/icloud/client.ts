@@ -1,24 +1,4 @@
-import { z } from "zod";
 import { logger } from "../lib/logger.js";
-
-// iCloud shared album API response schema
-const photoAssetSchema = z.object({
-  photoGuid: z.string(),
-  derivatives: z.record(
-    z.object({
-      checksum: z.string(),
-      fileSize: z.number(),
-      width: z.number(),
-      height: z.number(),
-    }),
-  ),
-  caption: z.string().optional(),
-  dateCreated: z.string(),
-});
-
-const albumResponseSchema = z.object({
-  photos: z.array(photoAssetSchema),
-});
 
 export interface ICloudPhoto {
   id: string;
@@ -109,7 +89,7 @@ export class ICloudClient {
         null,
       );
 
-      const [derivativeKey, derivative] = best || [null, null];
+      const [, derivative] = best || [null, null];
       const assetUrl = items[derivative?.checksum]?.url_location;
       const urlPath = items[derivative?.checksum]?.url_path;
 

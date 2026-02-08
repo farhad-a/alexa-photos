@@ -65,9 +65,7 @@ export class StateStore {
   }
 
   getAllMappings(): PhotoMapping[] {
-    const rows = this.db
-      .prepare("SELECT * FROM photo_mappings")
-      .all() as any[];
+    const rows = this.db.prepare("SELECT * FROM photo_mappings").all() as any[];
 
     return rows.map((row) => ({
       icloudId: row.icloud_id,
@@ -82,13 +80,13 @@ export class StateStore {
       .prepare(
         `INSERT OR REPLACE INTO photo_mappings 
          (icloud_id, icloud_checksum, amazon_id, synced_at) 
-         VALUES (?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?)`,
       )
       .run(
         mapping.icloudId,
         mapping.icloudChecksum,
         mapping.amazonId,
-        new Date().toISOString()
+        new Date().toISOString(),
       );
 
     logger.debug({ icloudId: mapping.icloudId }, "Added photo mapping");

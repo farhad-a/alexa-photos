@@ -1,5 +1,7 @@
 # Alexa Photos Sync
 
+[![CI](https://git.home.alaghband.com/farhad/alexa-photos/actions/workflows/ci.yml/badge.svg)](https://git.home.alaghband.com/farhad/alexa-photos/actions)
+
 Sync photos from an iCloud shared album to Amazon Photos for display on Echo Show devices.
 
 Uses the Amazon Photos REST API (no browser required).
@@ -77,6 +79,33 @@ docker compose logs -f
 | `npm run start`        | Run production build             |
 | `npm run icloud:test`  | Test iCloud album fetch          |
 | `npm run amazon:setup` | Save Amazon Photos cookies       |
+
+## CI / Testing
+
+Run the full CI pipeline locally:
+
+```bash
+npm run format:check  # Check code formatting
+npm run lint          # Check for lint errors
+npm run build         # TypeScript compilation
+npm run test:run      # Run test suite (83 tests)
+```
+
+Or run all checks at once:
+
+```bash
+npm run format:check && npm run lint && npm run build && npm run test:run
+```
+
+Additional commands:
+
+```bash
+npm run format     # Auto-fix formatting issues
+npm run lint:fix   # Auto-fix lint issues (limited)
+npm test           # Run tests in watch mode
+```
+
+> **GitHub Actions**: A CI workflow is configured in `.github/workflows/ci.yml` for GitHub repositories. For self-hosted git servers, run the CI commands in your preferred CI system.
 
 ## Environment Variables
 
