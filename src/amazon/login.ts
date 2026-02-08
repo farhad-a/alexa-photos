@@ -1,57 +1,107 @@
 /**
- * Interactive login script for Amazon Photos
- * Run with: npm run amazon:login
+ * Cookie setup helper for Amazon Photos
+ * Run with: npm run amazon:setup
  *
- * This will open a browser window for you to complete login (including 2FA)
- * and save the session for future use.
+ * Guides you through extracting cookies from your browser and
+ * saves them to ./data/amazon-cookies.json for the sync service.
  */
 
-import { chromium } from "playwright";
+import "dotenv/config";
 import * as fs from "fs/promises";
+import * as readline from "readline/promises";
+import { AmazonClient } from "./client.js";
 
-const SESSION_DIR = "./data/amazon-session";
+const COOKIES_PATH = "./data/amazon-cookies.json";
+
+async function prompt(
+  rl: readline.Interface,
+  question: string,
+): Promise<string> {
+  const answer = await rl.question(question);
+  return answer.trim();
+}
 
 async function main() {
-  console.log("Opening browser for Amazon Photos login...\n");
-  console.log("Please complete the login process in the browser window.");
-  console.log("This includes any 2FA verification.\n");
+  console.log("╔══════════════════════════════════════════════╗");
+  console.log("║   Amazon Photos — Cookie Setup              ║");
+  console.log("╚══════════════════════════════════════════════╝\n");
 
-  const browser = await chromium.launch({
-    headless: false, // Show the browser
+  console.log("This script saves the cookies needed to access the");
+  console.log("Amazon Photos REST API.\n");
+  console.log("Steps:");
+  console.log("  1. Open https://www.amazon.com/photos in your browser");
+  console.log("  2. Log in (complete any 2FA)");
+  console.log(
+    "  3. Open DevTools (F12) → Application → Cookies → www.amazon.com",
+  );
+  console.log("  4. Copy the values for the cookies listed below\n");
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
   });
 
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 720 },
-  });
+  try {
+    const sessionId = await prompt(rl, "session-id: ");
+    if (!sessionId) {
+      console.error("session-id is required");
+      process.exit(1);
+    }
 
-  const page = await context.newPage();
+    // Determine US vs international
+    const region = await prompt(rl, "Region — (U)S or (I)nternational? [U]: ");
+    const isInternational = region.toLowerCase().startsWith("i");
 
-  await page.goto("https://www.amazon.com/photos");
+    let cookies: Record<string, string>;
 
-  console.log("Waiting for you to complete login...");
-  console.log('Once you see the Amazon Photos dashboard, press Enter here.\n');
+    if (isInternational) {
+      const tld = await prompt(rl, "TLD (e.g. ca, co.uk, de, fr, it, es): ");
+      const ubid = await prompt(rl, `ubid-acb${tld}: `);
+      const at = await prompt(rl, `at-acb${tld}: `);
+      cookies = {
+        "session-id": sessionId,
+        [`ubid-acb${tld}`]: ubid,
+        [`at-acb${tld}`]: at,
+      };
+    } else {
+      const ubid = await prompt(rl, "ubid-main: ");
+      const at = await prompt(rl, "at-main: ");
+      const xMain = await prompt(rl, "x-main: ");
+      const sessAt = await prompt(rl, "sess-at-main: ");
+      const sst = await prompt(rl, "sst-main: ");
+      cookies = {
+        "session-id": sessionId,
+        "ubid-main": ubid,
+        "at-main": at,
+        "x-main": xMain,
+        "sess-at-main": sessAt,
+        "sst-main": sst,
+      };
+    }
 
-  // Wait for user to complete login
-  await new Promise<void>((resolve) => {
-    process.stdin.once("data", () => resolve());
-  });
+    // Save to disk
+    await fs.mkdir("./data", { recursive: true });
+    await fs.writeFile(COOKIES_PATH, JSON.stringify(cookies, null, 2) + "\n");
+    console.log(`\n✓ Cookies saved to ${COOKIES_PATH}`);
 
-  // Verify we're logged in
-  const url = page.url();
-  if (url.includes("signin")) {
-    console.error("❌ Still on login page. Please complete login first.");
-    await browser.close();
-    process.exit(1);
+    // Verify
+    console.log("\nVerifying authentication...");
+    const client = new AmazonClient(cookies as any);
+    const ok = await client.checkAuth();
+
+    if (ok) {
+      console.log("✓ Authentication successful!");
+    } else {
+      console.warn(
+        "⚠  Could not verify auth — cookies may be invalid or expired.",
+      );
+      console.warn(
+        "   The file was still saved. You can re-run this script anytime.\n",
+      );
+    }
+  } finally {
+    rl.close();
   }
-
-  // Save session
-  await fs.mkdir(SESSION_DIR, { recursive: true });
-  await context.storageState({ path: `${SESSION_DIR}/state.json` });
-
-  console.log("✓ Session saved successfully!");
-  console.log(`  Session stored in: ${SESSION_DIR}/state.json`);
-
-  await browser.close();
 }
 
 main().catch(console.error);

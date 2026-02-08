@@ -17,7 +17,7 @@ if (!albumToken) {
 async function main() {
   console.log("Testing iCloud shared album fetch...\n");
 
-  const client = new ICloudClient(albumToken);
+  const client = new ICloudClient(albumToken!);
 
   try {
     const photos = await client.getPhotos();

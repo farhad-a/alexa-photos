@@ -1,200 +1,460 @@
-import { chromium, Browser, BrowserContext, Page } from "playwright";
 import { logger } from "../lib/logger.js";
-import { config } from "../lib/config.js";
+import { createHash } from "crypto";
 import * as fs from "fs/promises";
-import * as path from "path";
 
-const SESSION_DIR = "./data/amazon-session";
+/**
+ * Amazon Photos REST API client
+ *
+ * Ported from: https://github.com/trevorhobenshield/amazon_photos
+ * Uses the undocumented Amazon Drive v1 API with cookie-based authentication.
+ */
 
-export interface AmazonPhoto {
+const COOKIES_PATH = "./data/amazon-cookies.json";
+
+const NORTH_AMERICA_TLDS = new Set(["com", "ca", "com.mx", "com.br"]);
+
+const MAX_TRASH_BATCH = 50;
+
+export interface AmazonNode {
   id: string;
   name: string;
+  kind: string;
+  status: string;
+  contentProperties?: {
+    md5: string;
+    size: number;
+    contentType: string;
+    extension: string;
+  };
+  parents?: string[];
+  createdDate?: string;
+  modifiedDate?: string;
+}
+
+export interface AmazonCookies {
+  "session-id": string;
+  [key: string]: string;
 }
 
 export class AmazonClient {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private page: Page | null = null;
+  private cookies: AmazonCookies;
+  private tld: string;
+  private driveUrl: string;
+  private cdproxyUrl: string;
+  private baseParams: Record<string, string>;
+  private sessionId: string;
+  private rootNodeId: string | null = null;
 
-  async init(): Promise<void> {
-    logger.debug("Initializing Amazon Photos client");
-
-    this.browser = await chromium.launch({
-      headless: true,
-    });
-
-    // Try to restore session
-    const sessionExists = await this.sessionExists();
-
-    this.context = await this.browser.newContext({
-      storageState: sessionExists ? `${SESSION_DIR}/state.json` : undefined,
-      viewport: { width: 1280, height: 720 },
-    });
-
-    this.page = await this.context.newPage();
+  constructor(cookies: AmazonCookies) {
+    this.cookies = cookies;
+    this.tld = this.determineTld(cookies);
+    this.driveUrl = `https://www.amazon.${this.tld}/drive/v1`;
+    this.cdproxyUrl = this.determineCdproxy();
+    this.sessionId = cookies["session-id"];
+    this.baseParams = {
+      asset: "ALL",
+      tempLink: "false",
+      resourceVersion: "V2",
+      ContentType: "JSON",
+    };
   }
 
-  private async sessionExists(): Promise<boolean> {
+  /**
+   * Load cookies from JSON file on disk.
+   *
+   * Expected format (US):
+   * ```json
+   * {
+   *   "session-id": "...",
+   *   "ubid-main": "...",
+   *   "at-main": "...",
+   *   "x-main": "...",
+   *   "sess-at-main": "...",
+   *   "sst-main": "..."
+   * }
+   * ```
+   */
+  static async fromFile(cookiePath = COOKIES_PATH): Promise<AmazonClient> {
+    const raw = await fs.readFile(cookiePath, "utf-8");
+    const cookies = JSON.parse(raw) as AmazonCookies;
+    return new AmazonClient(cookies);
+  }
+
+  /**
+   * Determine TLD from cookie key names.
+   * US cookies: `at-main` or `at_main` (hyphen or underscore).
+   * International: `at-acb{tld}`.
+   */
+  private determineTld(cookies: AmazonCookies): string {
+    for (const key of Object.keys(cookies)) {
+      if (key.endsWith("-main") || key.endsWith("_main")) return "com";
+      if (key.startsWith("at-acb")) return key.slice("at-acb".length);
+    }
+    return "com";
+  }
+
+  private determineCdproxy(): string {
+    if (NORTH_AMERICA_TLDS.has(this.tld)) {
+      return "https://content-na.drive.amazonaws.com/cdproxy/nodes";
+    }
+    return "https://content-eu.drive.amazonaws.com/cdproxy/nodes";
+  }
+
+  private get cookieHeader(): string {
+    return Object.entries(this.cookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
+  }
+
+  private get headers(): Record<string, string> {
+    return {
+      Cookie: this.cookieHeader,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "x-amzn-sessionid": this.sessionId,
+    };
+  }
+
+  private buildUrl(base: string, params: Record<string, string> = {}): string {
+    const url = new URL(base);
+    const allParams = { ...this.baseParams, ...params };
+    for (const [key, value] of Object.entries(allParams)) {
+      url.searchParams.set(key, value);
+    }
+    return url.toString();
+  }
+
+  /**
+   * Make a request with exponential backoff retry.
+   */
+  private async request(
+    method: string,
+    url: string,
+    options: {
+      body?: BodyInit;
+      headers?: Record<string, string>;
+      params?: Record<string, string>;
+    } = {},
+    maxRetries = 3,
+  ): Promise<Response> {
+    const fullUrl = this.buildUrl(url, options.params);
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const res = await fetch(fullUrl, {
+        method,
+        headers: { ...this.headers, ...options.headers },
+        body: options.body,
+      });
+
+      if (res.status === 401) {
+        logger.error("Amazon cookies expired — update your cookies file");
+        throw new Error(
+          `Amazon Photos auth failed — update ${COOKIES_PATH} with fresh cookies.`,
+        );
+      }
+
+      if (res.status === 409) return res; // conflict (duplicate) — not an error
+
+      if (res.ok) return res;
+
+      if (attempt < maxRetries) {
+        const delay = Math.min(Math.random() * 2 ** attempt * 1000, 20_000);
+        logger.warn(
+          { status: res.status, attempt, delay: Math.round(delay) },
+          "Request failed, retrying",
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Amazon API ${method} ${url} → ${res.status} ${text}`);
+      }
+    }
+    throw new Error("unreachable");
+  }
+
+  // ── public API ─────────────────────────────────────────────
+
+  /** Verify that cookies are still valid */
+  async checkAuth(): Promise<boolean> {
     try {
-      await fs.access(`${SESSION_DIR}/state.json`);
-      return true;
+      const res = await fetch(this.buildUrl(`${this.driveUrl}/account/info`), {
+        headers: this.headers,
+      });
+      if (res.ok) return true;
+      if (res.status === 503) {
+        logger.warn(
+          "Got 503 from Amazon (bot detection). " +
+            "This may happen from cloud/datacenter IPs. " +
+            "The service should work from a residential network.",
+        );
+      }
+      return false;
     } catch {
       return false;
     }
   }
 
-  async saveSession(): Promise<void> {
-    if (!this.context) return;
-
-    await fs.mkdir(SESSION_DIR, { recursive: true });
-    await this.context.storageState({ path: `${SESSION_DIR}/state.json` });
-    logger.debug("Session saved");
-  }
-
-  async isLoggedIn(): Promise<boolean> {
-    if (!this.page) throw new Error("Client not initialized");
-
-    await this.page.goto("https://www.amazon.com/photos");
-    await this.page.waitForLoadState("networkidle");
-
-    // Check if we're on the photos page or redirected to login
-    const url = this.page.url();
-    return !url.includes("signin") && !url.includes("ap/signin");
-  }
-
-  async login(): Promise<void> {
-    if (!this.page) throw new Error("Client not initialized");
-
-    logger.info("Logging into Amazon Photos");
-
-    await this.page.goto("https://www.amazon.com/photos");
-
-    // Wait for and fill email
-    await this.page.waitForSelector('input[type="email"], input[name="email"]');
-    await this.page.fill(
-      'input[type="email"], input[name="email"]',
-      config.amazonEmail
-    );
-    await this.page.click('input[type="submit"], #continue');
-
-    // Wait for and fill password
-    await this.page.waitForSelector('input[type="password"]');
-    await this.page.fill('input[type="password"]', config.amazonPassword);
-    await this.page.click('input[type="submit"], #signInSubmit');
-
-    // Handle potential 2FA
-    // This will pause and wait for manual intervention if 2FA is required
-    try {
-      await this.page.waitForURL("**/photos**", { timeout: 10000 });
-    } catch {
-      logger.warn(
-        "Login may require 2FA - waiting for manual completion (60s timeout)"
-      );
-      await this.page.waitForURL("**/photos**", { timeout: 60000 });
-    }
-
-    await this.saveSession();
-    logger.info("Successfully logged into Amazon Photos");
-  }
-
-  async ensureLoggedIn(): Promise<void> {
-    if (!(await this.isLoggedIn())) {
-      await this.login();
-    }
-  }
-
-  async uploadPhoto(
-    photoBuffer: Buffer,
-    filename: string,
-    albumName: string
-  ): Promise<string> {
-    if (!this.page) throw new Error("Client not initialized");
-
-    await this.ensureLoggedIn();
-
-    logger.debug({ filename, albumName }, "Uploading photo to Amazon Photos");
-
-    // Navigate to the album or create it
-    await this.navigateToAlbum(albumName);
-
-    // Amazon Photos uses a file input for uploads
-    const fileInput = await this.page.waitForSelector('input[type="file"]');
-
-    // Create a temporary file for upload
-    const tempPath = path.join("/tmp", filename);
-    await fs.writeFile(tempPath, photoBuffer);
-
-    await fileInput.setInputFiles(tempPath);
-
-    // Wait for upload to complete
-    await this.page.waitForSelector('[data-testid="upload-complete"]', {
-      timeout: 60000,
+  /** Get root node of Amazon Drive */
+  async getRoot(): Promise<AmazonNode> {
+    const res = await this.request("GET", `${this.driveUrl}/nodes`, {
+      params: { filters: "isRoot:true" },
     });
-
-    // Clean up temp file
-    await fs.unlink(tempPath);
-
-    // Get the photo ID from the page (implementation depends on Amazon's UI)
-    const photoId = await this.extractPhotoId();
-
-    logger.info({ filename, photoId }, "Photo uploaded successfully");
-    return photoId;
+    const data = await res.json();
+    const root = data.data?.[0];
+    if (!root) throw new Error("Failed to get root node");
+    this.rootNodeId = root.id;
+    return root;
   }
 
-  private async navigateToAlbum(albumName: string): Promise<void> {
-    if (!this.page) throw new Error("Client not initialized");
+  /** Search for media using the search endpoint (supports type, things, time, location filters) */
+  async search(
+    filters: string,
+    limit = 200,
+    offset = 0,
+  ): Promise<{ data: AmazonNode[]; count: number }> {
+    const res = await this.request("GET", `${this.driveUrl}/search`, {
+      params: {
+        filters,
+        limit: String(limit),
+        offset: String(offset),
+        searchContext: "all",
+      },
+    });
+    return res.json();
+  }
 
-    await this.page.goto("https://www.amazon.com/photos/albums");
-    await this.page.waitForLoadState("networkidle");
+  /** Query nodes using the nodes endpoint (supports kind, name, isRoot, status, parentIds filters) */
+  async getNodes(
+    filters: string,
+    limit = 200,
+    offset = 0,
+  ): Promise<{ data: AmazonNode[]; count: number }> {
+    const res = await this.request("GET", `${this.driveUrl}/nodes`, {
+      params: {
+        filters,
+        limit: String(limit),
+        offset: String(offset),
+      },
+    });
+    return res.json();
+  }
 
-    // Look for existing album
-    const albumLink = this.page.locator(`text="${albumName}"`);
+  /** List children of a node */
+  async listChildren(
+    nodeId: string,
+    filters = "",
+    limit = 200,
+    offset = 0,
+  ): Promise<{ data: AmazonNode[]; count: number }> {
+    const params: Record<string, string> = {
+      limit: String(limit),
+      offset: String(offset),
+    };
+    if (filters) params.filters = filters;
 
-    if ((await albumLink.count()) > 0) {
-      await albumLink.click();
-    } else {
-      // Create new album
-      logger.info({ albumName }, "Creating new album");
-      await this.page.click('[data-testid="create-album"]');
-      await this.page.fill('[data-testid="album-name-input"]', albumName);
-      await this.page.click('[data-testid="create-album-submit"]');
+    const res = await this.request(
+      "GET",
+      `${this.driveUrl}/nodes/${nodeId}/children`,
+      { params },
+    );
+    return res.json();
+  }
+
+  /**
+   * Upload a photo buffer to Amazon Photos.
+   * Returns the created node (includes `.id`).
+   */
+  async uploadPhoto(
+    buffer: Buffer,
+    filename: string,
+    parentNodeId?: string,
+  ): Promise<AmazonNode> {
+    if (!parentNodeId) {
+      if (!this.rootNodeId) await this.getRoot();
+      parentNodeId = this.rootNodeId!;
     }
 
-    await this.page.waitForLoadState("networkidle");
+    logger.debug({ filename, parentNodeId }, "Uploading photo");
+
+    const res = await fetch(
+      this.buildUrl(this.cdproxyUrl, {
+        name: filename,
+        kind: "FILE",
+        parentNodeId,
+      }),
+      {
+        method: "POST",
+        headers: {
+          ...this.headers,
+          "Content-Type": "application/octet-stream",
+          "Content-Length": String(buffer.length),
+        },
+        body: new Uint8Array(buffer),
+      },
+    );
+
+    if (res.status === 409) {
+      // File with identical MD5 already exists
+      const data = await res.json();
+      logger.debug({ filename, nodeId: data.id }, "Duplicate — already exists");
+      return data;
+    }
+
+    if (res.status === 401) {
+      throw new Error("Amazon Photos auth failed — cookies expired.");
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Upload failed: ${res.status} ${text}`);
+    }
+
+    const node: AmazonNode = await res.json();
+    logger.info({ filename, nodeId: node.id }, "Photo uploaded");
+    return node;
   }
 
-  private async extractPhotoId(): Promise<string> {
-    // This is a placeholder - actual implementation depends on Amazon's UI
-    // May need to parse the URL or extract from page elements
-    return `amazon-${Date.now()}`;
+  /** Move nodes to trash (batched) */
+  async trash(nodeIds: string[]): Promise<void> {
+    for (let i = 0; i < nodeIds.length; i += MAX_TRASH_BATCH) {
+      const batch = nodeIds.slice(i, i + MAX_TRASH_BATCH);
+      await this.request("PATCH", `${this.driveUrl}/trash`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recurse: "true",
+          op: "add",
+          conflictResolution: "RENAME",
+          value: batch,
+          resourceVersion: "V2",
+          ContentType: "JSON",
+        }),
+      });
+    }
   }
 
-  async deletePhoto(photoId: string): Promise<void> {
-    if (!this.page) throw new Error("Client not initialized");
-
-    logger.debug({ photoId }, "Deleting photo from Amazon Photos");
-
-    // Implementation depends on Amazon's UI
-    // Typically: navigate to photo, click delete, confirm
-
-    logger.info({ photoId }, "Photo deleted successfully");
+  /** Permanently purge trashed nodes (batched) */
+  async purge(nodeIds: string[]): Promise<void> {
+    for (let i = 0; i < nodeIds.length; i += MAX_TRASH_BATCH) {
+      const batch = nodeIds.slice(i, i + MAX_TRASH_BATCH);
+      await this.request("POST", `${this.driveUrl}/bulk/nodes/purge`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recurse: "false",
+          nodeIds: batch,
+          resourceVersion: "V2",
+          ContentType: "JSON",
+        }),
+      });
+    }
   }
 
-  async getAlbumPhotos(albumName: string): Promise<AmazonPhoto[]> {
-    if (!this.page) throw new Error("Client not initialized");
-
-    await this.ensureLoggedIn();
-    await this.navigateToAlbum(albumName);
-
-    // Extract photo list from the album page
-    // Implementation depends on Amazon's UI structure
-
-    return [];
+  /** Delete nodes — trash then purge */
+  async deleteNodes(nodeIds: string[]): Promise<void> {
+    await this.trash(nodeIds);
+    await this.purge(nodeIds);
+    logger.info({ count: nodeIds.length }, "Nodes deleted");
   }
 
+  /** Find an album by exact name */
+  async findAlbum(name: string): Promise<AmazonNode | null> {
+    // Fetch all albums and filter locally — the API's name filter
+    // doesn't handle multi-word names reliably
+    const res = await this.getNodes(
+      "kind:VISUAL_COLLECTION AND status:AVAILABLE",
+    );
+    const match = res.data?.find((n) => n.name === name);
+    return match ?? null;
+  }
+
+  /** Create a new album */
+  async createAlbum(name: string): Promise<AmazonNode> {
+    const res = await this.request("POST", `${this.driveUrl}/nodes`, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "VISUAL_COLLECTION",
+        name,
+        resourceVersion: "V2",
+        ContentType: "JSON",
+      }),
+    });
+    const album: AmazonNode = await res.json();
+    logger.info({ albumId: album.id, name }, "Album created");
+    return album;
+  }
+
+  /** Add nodes to an existing album */
+  async addToAlbum(albumId: string, nodeIds: string[]): Promise<void> {
+    await this.request("PATCH", `${this.driveUrl}/nodes/${albumId}/children`, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        op: "add",
+        value: nodeIds,
+        resourceVersion: "V2",
+        ContentType: "JSON",
+      }),
+    });
+    logger.debug({ albumId, count: nodeIds.length }, "Added to album");
+  }
+
+  /** Remove nodes from an album (does not delete them) */
+  async removeFromAlbum(albumId: string, nodeIds: string[]): Promise<void> {
+    await this.request("PATCH", `${this.driveUrl}/nodes/${albumId}/children`, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        op: "remove",
+        value: nodeIds,
+        resourceVersion: "V2",
+        ContentType: "JSON",
+      }),
+    });
+  }
+
+  /** Find or create an album, returning its node ID */
+  async findOrCreateAlbum(name: string): Promise<string> {
+    const existing = await this.findAlbum(name);
+    if (existing) {
+      logger.debug({ albumId: existing.id, name }, "Found existing album");
+      return existing.id;
+    }
+    const created = await this.createAlbum(name);
+    return created.id;
+  }
+
+  /** Paginate through all node IDs in an album */
+  async getAlbumNodeIds(albumId: string): Promise<string[]> {
+    const ids: string[] = [];
+    let offset = 0;
+    const limit = 200;
+
+    while (true) {
+      const res = await this.listChildren(albumId, "", limit, offset);
+      if (!res.data?.length) break;
+      ids.push(...res.data.map((n) => n.id));
+      if (res.data.length < limit) break;
+      offset += limit;
+    }
+
+    return ids;
+  }
+
+  /** Upload a photo and immediately add it to an album. Returns the node ID. */
+  async uploadPhotoToAlbum(
+    buffer: Buffer,
+    filename: string,
+    albumId: string,
+  ): Promise<string> {
+    const node = await this.uploadPhoto(buffer, filename);
+    await this.addToAlbum(albumId, [node.id]);
+    return node.id;
+  }
+
+  /** MD5 hash helper for dedup */
+  static md5(buffer: Buffer): string {
+    return createHash("md5").update(buffer).digest("hex");
+  }
+
+  /** No-op — REST client has no resources to release */
   async close(): Promise<void> {
-    if (this.browser) {
-      await this.browser.close();
-    }
+    // Nothing to clean up (no browser, no persistent connection)
   }
 }

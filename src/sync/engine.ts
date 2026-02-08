@@ -9,6 +9,7 @@ export class SyncEngine {
   private amazon: AmazonClient | null = null;
   private state: StateStore;
   private isRunning = false;
+  private albumId: string | null = null;
 
   constructor(icloud: ICloudClient) {
     this.icloud = icloud;
@@ -47,7 +48,7 @@ export class SyncEngine {
           toAdd: toAdd.length,
           toRemove: toRemove.length,
         },
-        "Sync analysis complete"
+        "Sync analysis complete",
       );
 
       // Initialize Amazon client only if we have work to do
@@ -61,8 +62,8 @@ export class SyncEngine {
       }
 
       // Process removals
-      for (const mapping of toRemove) {
-        await this.removePhoto(mapping);
+      if (toRemove.length > 0) {
+        await this.removePhotos(toRemove);
       }
 
       logger.info("Sync complete");
@@ -76,8 +77,23 @@ export class SyncEngine {
 
   private async ensureAmazonClient(): Promise<void> {
     if (!this.amazon) {
-      this.amazon = new AmazonClient();
-      await this.amazon.init();
+      this.amazon = await AmazonClient.fromFile(config.amazonCookiesPath);
+
+      // Verify auth on first use
+      const ok = await this.amazon.checkAuth();
+      if (!ok) {
+        throw new Error(
+          "Amazon Photos authentication failed — run `npm run amazon:setup` to update cookies",
+        );
+      }
+      logger.debug("Amazon Photos client authenticated");
+    }
+
+    if (!this.albumId) {
+      this.albumId = await this.amazon.findOrCreateAlbum(
+        config.amazonAlbumName,
+      );
+      logger.debug({ albumId: this.albumId }, "Using album");
     }
   }
 
@@ -88,14 +104,15 @@ export class SyncEngine {
       // Download from iCloud
       const buffer = await this.icloud.downloadPhoto(photo);
 
-      // Generate filename
-      const filename = `${photo.id}.jpg`;
+      // Generate a descriptive filename
+      const ext = "jpg"; // iCloud shared albums serve JPEG
+      const filename = `${photo.id}.${ext}`;
 
-      // Upload to Amazon
-      const amazonId = await this.amazon!.uploadPhoto(
+      // Upload to Amazon and add to album
+      const amazonId = await this.amazon!.uploadPhotoToAlbum(
         buffer,
         filename,
-        config.amazonAlbumName
+        this.albumId!,
       );
 
       // Save mapping
@@ -111,24 +128,28 @@ export class SyncEngine {
     }
   }
 
-  private async removePhoto(mapping: PhotoMapping): Promise<void> {
-    logger.info({ icloudId: mapping.icloudId }, "Removing photo");
+  private async removePhotos(mappings: PhotoMapping[]): Promise<void> {
+    const amazonIds = mappings.map((m) => m.amazonId);
+
+    logger.info({ count: amazonIds.length }, "Removing photos");
 
     try {
-      // Delete from Amazon
-      await this.amazon!.deletePhoto(mapping.amazonId);
+      // Remove from album first, then delete the nodes
+      if (this.albumId) {
+        await this.amazon!.removeFromAlbum(this.albumId, amazonIds);
+      }
+      await this.amazon!.deleteNodes(amazonIds);
 
-      // Remove mapping
-      this.state.removeMapping(mapping.icloudId);
+      // Remove all mappings
+      for (const mapping of mappings) {
+        this.state.removeMapping(mapping.icloudId);
+      }
 
-      logger.info(
-        { icloudId: mapping.icloudId, amazonId: mapping.amazonId },
-        "Photo removed successfully"
-      );
+      logger.info({ count: amazonIds.length }, "Photos removed successfully");
     } catch (error) {
       logger.error(
-        { icloudId: mapping.icloudId, error },
-        "Failed to remove photo"
+        { count: amazonIds.length, error },
+        "Failed to remove photos",
       );
     }
   }
