@@ -13,7 +13,6 @@
       "extensions": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "ms-playwright.playwright",
         "GitHub.copilot"
       ],
       "settings": {
@@ -22,9 +21,7 @@
       }
     }
   },
-  "postCreateCommand": "npm install && npx playwright install chromium",
-  "mounts": [
-    "source=${localWorkspaceFolder}/data,target=/app/data,type=bind"
-  ],
+  "postCreateCommand": "npm install",
+  "mounts": ["source=${localWorkspaceFolder}/data,target=/app/data,type=bind"],
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
 }
