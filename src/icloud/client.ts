@@ -146,19 +146,14 @@ export class ICloudClient {
     return new Date((ts + appleEpochOffset) * 1000);
   }
 
-  async downloadPhoto(
-    photo: ICloudPhoto,
-    maxRetries = 3,
-  ): Promise<Buffer> {
+  async downloadPhoto(photo: ICloudPhoto, maxRetries = 3): Promise<Buffer> {
     logger.debug({ photoId: photo.id }, "Downloading photo");
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const response = await fetch(photo.url);
         if (!response.ok) {
-          throw new Error(
-            `HTTP ${response.status}: ${response.statusText}`,
-          );
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -177,10 +172,7 @@ export class ICloudClient {
         }
 
         // Exponential backoff with jitter: 1s, 2s, 4s (capped at 10s)
-        const delay = Math.min(
-          Math.random() * 2 ** attempt * 1000,
-          10_000,
-        );
+        const delay = Math.min(Math.random() * 2 ** attempt * 1000, 10_000);
         logger.warn(
           {
             photoId: photo.id,
