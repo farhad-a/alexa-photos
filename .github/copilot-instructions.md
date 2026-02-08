@@ -25,6 +25,7 @@ src/
 
 - **ICloudClient**: Stateless, uses public shared album API endpoints
   - Partition discovery via 330 redirect with `X-Apple-MMe-Host` header
+  - Photo downloads with exponential backoff retry (configurable max retries)
 - **AmazonClient**: REST API client using Amazon Drive v1 endpoints
   - Auth via cookies stored in `./data/amazon-cookies.json`
   - Base URL: `https://www.amazon.{tld}/drive/v1`

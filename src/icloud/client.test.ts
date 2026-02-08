@@ -323,6 +323,15 @@ describe("ICloudClient", () => {
   });
 
   describe("downloadPhoto", () => {
+    const makePhoto = (id: string): ICloudPhoto => ({
+      id,
+      checksum: "abc",
+      url: `https://images.example.com/${id}.jpg`,
+      width: 1920,
+      height: 1080,
+      dateCreated: new Date(),
+    });
+
     it("returns buffer of downloaded photo", async () => {
       const fakeData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]); // JPEG magic bytes
       mockFetch.mockResolvedValueOnce({
@@ -330,36 +339,57 @@ describe("ICloudClient", () => {
         arrayBuffer: async () => fakeData.buffer,
       });
 
-      const photo: ICloudPhoto = {
-        id: "p1",
-        checksum: "abc",
-        url: "https://images.example.com/photo.jpg",
-        width: 1920,
-        height: 1080,
-        dateCreated: new Date(),
-      };
-
-      const buffer = await client.downloadPhoto(photo);
+      const buffer = await client.downloadPhoto(makePhoto("p1"));
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBe(4);
       expect(buffer[0]).toBe(0xff);
     });
 
-    it("throws on download failure", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    it("retries on failure and succeeds", async () => {
+      // First attempt fails, second succeeds
+      mockFetch
+        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        });
 
-      const photo: ICloudPhoto = {
-        id: "p1",
-        checksum: "abc",
-        url: "https://images.example.com/missing.jpg",
-        width: 100,
-        height: 100,
-        dateCreated: new Date(),
-      };
+      const buffer = await client.downloadPhoto(makePhoto("p1"), 3);
+      expect(buffer.length).toBe(3);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
 
-      await expect(client.downloadPhoto(photo)).rejects.toThrow(
-        "Failed to download photo: 404",
+    it("retries on network error and succeeds", async () => {
+      // First two attempts fail with network error, third succeeds
+      mockFetch
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockRejectedValueOnce(new Error("Timeout"))
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new Uint8Array([1]).buffer,
+        });
+
+      const buffer = await client.downloadPhoto(makePhoto("p1"), 3);
+      expect(buffer.length).toBe(1);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("throws after exhausting all retries", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+      await expect(client.downloadPhoto(makePhoto("p1"), 2)).rejects.toThrow(
+        "Failed to download photo after 3 attempts",
       );
+      expect(mockFetch).toHaveBeenCalledTimes(3); // Initial + 2 retries
+    });
+
+    it("respects maxRetries parameter", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+      await expect(client.downloadPhoto(makePhoto("p1"), 0)).rejects.toThrow(
+        "Failed to download photo after 1 attempts",
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(1); // No retries
     });
   });
 });

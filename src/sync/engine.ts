@@ -110,8 +110,11 @@ export class SyncEngine {
     logger.info({ photoId: photo.id }, "Adding photo");
 
     try {
-      // Download from iCloud
-      const buffer = await this.icloud.downloadPhoto(photo);
+      // Download from iCloud with retry
+      const buffer = await this.icloud.downloadPhoto(
+        photo,
+        config.icloudDownloadMaxRetries,
+      );
 
       // Generate a descriptive filename
       const ext = "jpg"; // iCloud shared albums serve JPEG

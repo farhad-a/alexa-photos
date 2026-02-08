@@ -146,15 +146,56 @@ export class ICloudClient {
     return new Date((ts + appleEpochOffset) * 1000);
   }
 
-  async downloadPhoto(photo: ICloudPhoto): Promise<Buffer> {
+  async downloadPhoto(
+    photo: ICloudPhoto,
+    maxRetries = 3,
+  ): Promise<Buffer> {
     logger.debug({ photoId: photo.id }, "Downloading photo");
 
-    const response = await fetch(photo.url);
-    if (!response.ok) {
-      throw new Error(`Failed to download photo: ${response.status}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(photo.url);
+        if (!response.ok) {
+          throw new Error(
+            `HTTP ${response.status}: ${response.statusText}`,
+          );
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries;
+
+        if (isLastAttempt) {
+          logger.error(
+            { photoId: photo.id, attempt: attempt + 1, error },
+            "Failed to download photo after all retries",
+          );
+          throw new Error(
+            `Failed to download photo after ${maxRetries + 1} attempts: ${error}`,
+          );
+        }
+
+        // Exponential backoff with jitter: 1s, 2s, 4s (capped at 10s)
+        const delay = Math.min(
+          Math.random() * 2 ** attempt * 1000,
+          10_000,
+        );
+        logger.warn(
+          {
+            photoId: photo.id,
+            attempt: attempt + 1,
+            delay: Math.round(delay),
+            error: String(error),
+          },
+          "Download failed, retrying",
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    // TypeScript needs this, but we'll never reach here
+    throw new Error("Unreachable");
   }
 }

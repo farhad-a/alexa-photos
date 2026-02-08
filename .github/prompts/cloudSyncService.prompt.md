@@ -34,6 +34,7 @@ src/
 - **Partition discovery**: POST to `p01-sharedstreams.icloud.com`, follow 330 redirect via `X-Apple-MMe-Host` header
 - **Endpoints**: `/webstream` (metadata + photo GUIDs), `/webasseturls` (download URLs)
 - **Date parsing**: Handles both ISO strings and Apple epoch (seconds since 2001-01-01)
+- **Retry logic**: Exponential backoff with jitter for photo downloads (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`, default: 3)
 - **Output**: `ICloudPhoto[]` with id, checksum, url, dimensions, dateCreated
 
 ### AmazonClient (`src/amazon/client.ts`)
@@ -79,13 +80,15 @@ src/
 
 All env vars validated with Zod in `src/lib/config.ts`:
 
-| Variable                | Required | Default                      | Description                                   |
-| ----------------------- | -------- | ---------------------------- | --------------------------------------------- |
-| `ICLOUD_ALBUM_TOKEN`    | ✅       | —                            | Shared album token from iCloud URL            |
-| `AMAZON_COOKIES_PATH`   | ❌       | `./data/amazon-cookies.json` | Path to cookies JSON                          |
-| `AMAZON_ALBUM_NAME`     | ❌       | `Echo Show`                  | Target album name in Amazon Photos            |
-| `POLL_INTERVAL_SECONDS` | ❌       | `60`                         | Polling interval (converted to ms internally) |
-| `LOG_LEVEL`             | ❌       | `info`                       | pino log level                                |
+| Variable                      | Required | Default                      | Description                                   |
+| ----------------------------- | -------- | ---------------------------- | --------------------------------------------- |
+| `ICLOUD_ALBUM_TOKEN`          | ✅       | —                            | Shared album token from iCloud URL            |
+| `ICLOUD_DOWNLOAD_MAX_RETRIES` | ❌       | `3`                          | Max retry attempts for photo downloads        |
+| `AMAZON_COOKIES_PATH`         | ❌       | `./data/amazon-cookies.json` | Path to cookies JSON                          |
+| `AMAZON_ALBUM_NAME`           | ❌       | `Echo Show`                  | Target album name in Amazon Photos            |
+| `SYNC_DELETIONS`              | ❌       | `true`                       | Delete from Amazon when removed from iCloud   |
+| `POLL_INTERVAL_SECONDS`       | ❌       | `60`                         | Polling interval (converted to ms internally) |
+| `LOG_LEVEL`                   | ❌       | `info`                       | pino log level                                |
 
 ## Development Workflow
 
@@ -131,15 +134,12 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [ ] **Write tests**: No test suite exists yet (`npm run test` fails — vitest configured but no test files). Add unit tests for:
-  - `ICloudClient` — date parsing, photo mapping, partition discovery
-  - `AmazonClient` — URL building, cookie header, TLD detection, retry logic
-  - `SyncEngine` — diff logic (additions, removals, no-ops)
-  - `StateStore` — CRUD operations with in-memory SQLite
+- [x] **Write tests**: 83 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
+- [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
+- [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [ ] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
 - [ ] **Cookie refresh automation**: Investigate if `sess-at-main` / `sst-main` can be used to refresh `at-main` without manual browser re-login
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
-- [ ] **Retry on download failures**: iCloud download failures currently skip the photo — add retry with backoff
 - [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)
 - [ ] **Metrics / health endpoint**: Add a simple HTTP health endpoint for Docker health checks and monitoring
 - [ ] **CI pipeline**: GitHub Actions to lint, type-check, and run tests on push

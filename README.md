@@ -80,14 +80,15 @@ docker compose logs -f
 
 ## Environment Variables
 
-| Variable                | Description                               | Default                      |
-| ----------------------- | ----------------------------------------- | ---------------------------- |
-| `ICLOUD_ALBUM_TOKEN`    | Token from shared album URL               | (required)                   |
-| `AMAZON_COOKIES_PATH`   | Path to cookies JSON file                 | `./data/amazon-cookies.json` |
-| `AMAZON_ALBUM_NAME`     | Album name in Amazon Photos               | `Echo Show`                  |
-| `SYNC_DELETIONS`        | Delete from Amazon when removed from iCloud | `true`                       |
-| `POLL_INTERVAL_SECONDS` | Sync interval in seconds                  | `60`                         |
-| `LOG_LEVEL`             | Logging level                             | `info`                       |
+| Variable                      | Description                               | Default                      |
+| ----------------------------- | ----------------------------------------- | ---------------------------- |
+| `ICLOUD_ALBUM_TOKEN`          | Token from shared album URL               | (required)                   |
+| `ICLOUD_DOWNLOAD_MAX_RETRIES` | Retry attempts for photo downloads        | `3`                          |
+| `AMAZON_COOKIES_PATH`         | Path to cookies JSON file                 | `./data/amazon-cookies.json` |
+| `AMAZON_ALBUM_NAME`           | Album name in Amazon Photos               | `Echo Show`                  |
+| `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
+| `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                  | `60`                         |
+| `LOG_LEVEL`                   | Logging level                             | `info`                       |
 
 ## How It Works
 

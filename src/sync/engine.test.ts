@@ -21,6 +21,7 @@ vi.mock("../lib/logger.js", () => ({
 vi.mock("../lib/config.js", () => ({
   config: {
     icloudAlbumToken: "test-token",
+    icloudDownloadMaxRetries: 3,
     amazonCookiesPath: "./data/amazon-cookies.json",
     amazonAlbumName: "Echo Show",
     syncDeletions: true,
