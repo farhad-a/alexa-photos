@@ -134,13 +134,13 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [x] **Write tests**: 83 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
+- [x] **Write tests**: 86 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
+- [x] **CI pipeline**: GitHub Actions and Gitea workflows to lint, type-check, and run tests on push
+- [x] **Cookie refresh automation**: Automatically refreshes Amazon `at-main` token using `sess-at-main`/`sst-main` session cookies when 401 is encountered
 - [ ] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
-- [ ] **Cookie refresh automation**: Investigate if `sess-at-main` / `sst-main` can be used to refresh `at-main` without manual browser re-login
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
 - [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)
 - [ ] **Metrics / health endpoint**: Add a simple HTTP health endpoint for Docker health checks and monitoring
-- [ ] **CI pipeline**: GitHub Actions to lint, type-check, and run tests on push
-- [ ] **Cookie expiry alerting**: Detect 401 from Amazon and send a notification (email, push) to re-authenticate
+- [ ] **Cookie expiry alerting**: Detect refresh failures and send a notification (email, push) to re-authenticate

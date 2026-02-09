@@ -5,6 +5,7 @@ const configSchema = z.object({
   icloudDownloadMaxRetries: z.coerce.number().default(3),
   amazonCookiesPath: z.string().default("./data/amazon-cookies.json"),
   amazonAlbumName: z.string().default("Echo Show"),
+  amazonAutoRefreshCookies: z.coerce.boolean().default(true),
   syncDeletions: z.coerce.boolean().default(true),
   pollIntervalMs: z.coerce
     .number()
@@ -21,6 +22,7 @@ function loadConfig(): Config {
     icloudDownloadMaxRetries: process.env.ICLOUD_DOWNLOAD_MAX_RETRIES,
     amazonCookiesPath: process.env.AMAZON_COOKIES_PATH,
     amazonAlbumName: process.env.AMAZON_ALBUM_NAME,
+    amazonAutoRefreshCookies: process.env.AMAZON_AUTO_REFRESH_COOKIES,
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     logLevel: process.env.LOG_LEVEL,

@@ -5,6 +5,12 @@ import { AmazonClient, AmazonCookies } from "./client.js";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
+// Mock fs for cookie persistence
+vi.mock("fs/promises", () => ({
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+}));
+
 // Suppress pino logging in tests
 vi.mock("../lib/logger.js", () => ({
   logger: {
@@ -345,19 +351,19 @@ describe("AmazonClient", () => {
   });
 
   describe("request retry logic", () => {
-    it("throws immediately on 401", async () => {
+    it("throws immediately on 401 when autoRefresh is disabled", async () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 401,
         text: async () => "Unauthorized",
       });
 
-      const client = new AmazonClient(makeUsCookies());
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: false });
       await expect(
         client["request"]("GET", "https://www.amazon.com/drive/v1/nodes"),
       ).rejects.toThrow("auth failed");
 
-      // Should only have been called once (no retries on 401)
+      // Should only have been called once (no retries on 401 when autoRefresh is off)
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
@@ -375,6 +381,100 @@ describe("AmazonClient", () => {
       );
       expect(res.status).toBe(409);
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("cookie refresh", () => {
+    it("attempts to refresh on 401 when autoRefresh is enabled", async () => {
+      // First call: 401 error
+      // Second call: refresh endpoint (will also fail in this test)
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => "Unauthorized",
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => "Refresh failed",
+        });
+
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: true });
+      await expect(
+        client["request"]("GET", "https://www.amazon.com/drive/v1/nodes"),
+      ).rejects.toThrow("auth failed");
+
+      // Should have been called twice: original request + refresh attempt
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Second call should be to the refresh endpoint
+      const refreshCall = mockFetch.mock.calls[1];
+      expect(refreshCall[0]).toContain("/ap/exchangetoken/refresh");
+    });
+
+    it("skips refresh when sess-at-main is missing", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "Unauthorized",
+      });
+
+      const cookies: AmazonCookies = {
+        "session-id": "123",
+        "ubid-main": "456",
+        "at-main": "Atza|token",
+        // Missing sess-at-main and sst-main
+      };
+
+      const client = new AmazonClient(cookies, { autoRefresh: true });
+      await expect(
+        client["request"]("GET", "https://www.amazon.com/drive/v1/nodes"),
+      ).rejects.toThrow("auth failed");
+
+      // Should only call once (original request, no refresh attempt)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries request after successful token refresh", async () => {
+      // First call: 401 error
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "Unauthorized",
+      });
+
+      // Second call: successful refresh
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: {
+            tokens: {
+              cookies: [{ Name: "at-main", Value: "Atza|new-token" }],
+            },
+          },
+        }),
+      });
+
+      // Third call: retry original request with new token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      const result = await client["request"](
+        "GET",
+        "https://www.amazon.com/drive/v1/nodes",
+      );
+
+      expect(result.ok).toBe(true);
+      // Should have been called 3 times: original + refresh + retry
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });
 });

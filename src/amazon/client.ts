@@ -44,13 +44,23 @@ export class AmazonClient {
   private baseParams: Record<string, string>;
   private sessionId: string;
   private rootNodeId: string | null = null;
+  private cookiesPath: string;
+  private autoRefresh: boolean;
 
-  constructor(cookies: AmazonCookies) {
+  constructor(
+    cookies: AmazonCookies,
+    options: {
+      cookiesPath?: string;
+      autoRefresh?: boolean;
+    } = {},
+  ) {
     this.cookies = cookies;
     this.tld = this.determineTld(cookies);
     this.driveUrl = `https://www.amazon.${this.tld}/drive/v1`;
     this.cdproxyUrl = this.determineCdproxy();
     this.sessionId = cookies["session-id"];
+    this.cookiesPath = options.cookiesPath || COOKIES_PATH;
+    this.autoRefresh = options.autoRefresh ?? true;
     this.baseParams = {
       asset: "ALL",
       tempLink: "false",
@@ -74,10 +84,13 @@ export class AmazonClient {
    * }
    * ```
    */
-  static async fromFile(cookiePath = COOKIES_PATH): Promise<AmazonClient> {
+  static async fromFile(
+    cookiePath = COOKIES_PATH,
+    autoRefresh = true,
+  ): Promise<AmazonClient> {
     const raw = await fs.readFile(cookiePath, "utf-8");
     const cookies = JSON.parse(raw) as AmazonCookies;
-    return new AmazonClient(cookies);
+    return new AmazonClient(cookies, { cookiesPath: cookiePath, autoRefresh });
   }
 
   /**
@@ -147,9 +160,18 @@ export class AmazonClient {
       });
 
       if (res.status === 401) {
+        // Try to refresh cookies automatically
+        if (this.autoRefresh && attempt === 0) {
+          logger.info("Token expired, attempting automatic refresh...");
+          const refreshed = await this.refreshCookies();
+          if (refreshed) {
+            logger.info("Cookies refreshed successfully, retrying request");
+            continue; // Retry the request with new cookies
+          }
+        }
         logger.error("Amazon cookies expired — update your cookies file");
         throw new Error(
-          `Amazon Photos auth failed — update ${COOKIES_PATH} with fresh cookies.`,
+          `Amazon Photos auth failed — update ${this.cookiesPath} with fresh cookies.`,
         );
       }
 
@@ -170,6 +192,88 @@ export class AmazonClient {
       }
     }
     throw new Error("unreachable");
+  }
+
+  /**
+   * Attempt to refresh the authentication token using session cookies.
+   * Returns true if refresh was successful, false otherwise.
+   */
+  private async refreshCookies(): Promise<boolean> {
+    try {
+      // Check if we have the necessary session tokens
+      const sessAt = this.cookies["sess-at-main"];
+      const sst = this.cookies["sst-main"];
+      const xMain = this.cookies["x-main"];
+
+      if (!sessAt || !sst) {
+        logger.warn(
+          "Cannot auto-refresh: sess-at-main or sst-main not available",
+        );
+        return false;
+      }
+
+      logger.debug("Attempting to exchange session token for new at-main");
+
+      // Amazon's token exchange endpoint
+      const exchangeUrl = `https://www.amazon.${this.tld}/ap/exchangetoken/refresh`;
+
+      const formData = new URLSearchParams({
+        app_name: "Amazon Drive",
+        requested_token_type: "auth_cookies",
+        domain: `.amazon.${this.tld}`,
+        source_token_type: "refresh_token",
+        source_token: sessAt,
+      });
+
+      const response = await fetch(exchangeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Cookie: `sess-at-main=${sessAt}; sst-main=${sst}${xMain ? `; x-main=${xMain}` : ""}`,
+          "User-Agent": this.headers["User-Agent"],
+        },
+        body: formData.toString(),
+      });
+
+      if (!response.ok) {
+        logger.warn(
+          { status: response.status },
+          "Token refresh failed — manual re-authentication required",
+        );
+        return false;
+      }
+
+      const data = await response.json();
+
+      // Extract new at-main token from response
+      if (
+        data.response?.tokens?.cookies &&
+        Array.isArray(data.response.tokens.cookies)
+      ) {
+        for (const cookie of data.response.tokens.cookies) {
+          if (cookie.Name === "at-main" && cookie.Value) {
+            // Update in-memory cookies
+            this.cookies["at-main"] = cookie.Value;
+
+            // Persist to disk
+            await fs.writeFile(
+              this.cookiesPath,
+              JSON.stringify(this.cookies, null, 2),
+              "utf-8",
+            );
+
+            logger.info("Successfully refreshed at-main token");
+            return true;
+          }
+        }
+      }
+
+      logger.warn("Token refresh response missing at-main cookie");
+      return false;
+    } catch (error) {
+      logger.error({ error }, "Cookie refresh failed");
+      return false;
+    }
   }
 
   // ── public API ─────────────────────────────────────────────
@@ -301,6 +405,16 @@ export class AmazonClient {
     }
 
     if (res.status === 401) {
+      // Try to refresh and retry once
+      if (this.autoRefresh) {
+        logger.info("Upload auth failed, attempting refresh...");
+        const refreshed = await this.refreshCookies();
+        if (refreshed) {
+          logger.info("Retrying upload with refreshed cookies");
+          // Retry upload with new cookies
+          return this.uploadPhoto(buffer, filename, parentNodeId);
+        }
+      }
       throw new Error("Amazon Photos auth failed — cookies expired.");
     }
 

@@ -86,7 +86,10 @@ export class SyncEngine {
 
   private async ensureAmazonClient(): Promise<void> {
     if (!this.amazon) {
-      this.amazon = await AmazonClient.fromFile(config.amazonCookiesPath);
+      this.amazon = await AmazonClient.fromFile(
+        config.amazonCookiesPath,
+        config.amazonAutoRefreshCookies,
+      );
 
       // Verify auth on first use
       const ok = await this.amazon.checkAuth();

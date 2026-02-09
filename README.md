@@ -120,7 +120,7 @@ Run the full CI pipeline locally:
 npm run format:check  # Check code formatting
 npm run lint          # Check for lint errors
 npm run build         # TypeScript compilation
-npm run test:run      # Run test suite (83 tests)
+npm run test:run      # Run test suite (86 tests)
 ```
 
 Or run all checks at once:
@@ -147,6 +147,7 @@ npm test           # Run tests in watch mode
 | `ICLOUD_DOWNLOAD_MAX_RETRIES` | Retry attempts for photo downloads          | `3`                          |
 | `AMAZON_COOKIES_PATH`         | Path to cookies JSON file                   | `./data/amazon-cookies.json` |
 | `AMAZON_ALBUM_NAME`           | Album name in Amazon Photos                 | `Echo Show`                  |
+| `AMAZON_AUTO_REFRESH_COOKIES` | Automatically refresh expired auth tokens   | `true`                       |
 | `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
 | `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
 | `LOG_LEVEL`                   | Logging level                               | `info`                       |
@@ -166,7 +167,9 @@ npm test           # Run tests in watch mode
 
 ### Amazon Cookies Expired
 
-Run `npm run amazon:setup` again to save fresh cookies from your browser.
+The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-main`, `sst-main`). If automatic refresh fails, run `npm run amazon:setup` again to save fresh cookies from your browser.
+
+To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 
 ### iCloud Fetch Fails
 
