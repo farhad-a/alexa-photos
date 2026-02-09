@@ -15,6 +15,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "icloud:test": "tsx src/icloud/test.ts",
     "amazon:setup": "tsx src/amazon/login.ts",
+    "notifications:test": "NODE_OPTIONS='--import tsx' node --env-file=.env src/lib/test-notifications.ts",
     "docker:build": "docker build -t alexa-photos:local .",
     "docker:run": "docker run --rm -v ./data:/app/data --env-file .env alexa-photos:local"
   },

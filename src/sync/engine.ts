@@ -3,6 +3,7 @@ import { AmazonClient } from "../amazon/client.js";
 import { StateStore, PhotoMapping } from "../state/store.js";
 import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
+import { NotificationService } from "../lib/notifications.js";
 
 export interface SyncMetrics {
   lastSync?: {
@@ -24,6 +25,7 @@ export class SyncEngine {
   private state: StateStore;
   private isRunning = false;
   private albumId: string | null = null;
+  private notifications: NotificationService;
   private metrics: SyncMetrics = {
     totalSyncs: 0,
     totalErrors: 0,
@@ -33,6 +35,7 @@ export class SyncEngine {
   constructor(icloud: ICloudClient) {
     this.icloud = icloud;
     this.state = new StateStore();
+    this.notifications = new NotificationService(config);
   }
 
   getMetrics(): SyncMetrics {
@@ -139,6 +142,7 @@ export class SyncEngine {
       this.amazon = await AmazonClient.fromFile(
         config.amazonCookiesPath,
         config.amazonAutoRefreshCookies,
+        (message, level) => this.notifications.sendAlert(message, level),
       );
 
       // Verify auth on first use

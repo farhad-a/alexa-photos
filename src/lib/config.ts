@@ -12,6 +12,9 @@ const configSchema = z.object({
     .default(60)
     .transform((s) => s * 1000),
   healthPort: z.coerce.number().default(3000),
+  alertWebhookUrl: z.string().optional(),
+  pushoverToken: z.string().optional(),
+  pushoverUser: z.string().optional(),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -27,6 +30,9 @@ function loadConfig(): Config {
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     healthPort: process.env.HEALTH_PORT,
+    alertWebhookUrl: process.env.ALERT_WEBHOOK_URL,
+    pushoverToken: process.env.PUSHOVER_TOKEN,
+    pushoverUser: process.env.PUSHOVER_USER,
     logLevel: process.env.LOG_LEVEL,
   });
 }

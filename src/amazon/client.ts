@@ -2,6 +2,10 @@ import { logger } from "../lib/logger.js";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 
+export interface NotificationCallback {
+  (message: string, level: "error" | "warning" | "info"): Promise<void>;
+}
+
 /**
  * Amazon Photos REST API client
  *
@@ -46,12 +50,14 @@ export class AmazonClient {
   private rootNodeId: string | null = null;
   private cookiesPath: string;
   private autoRefresh: boolean;
+  private notificationCallback?: NotificationCallback;
 
   constructor(
     cookies: AmazonCookies,
     options: {
       cookiesPath?: string;
       autoRefresh?: boolean;
+      notificationCallback?: NotificationCallback;
     } = {},
   ) {
     this.cookies = cookies;
@@ -61,6 +67,7 @@ export class AmazonClient {
     this.sessionId = cookies["session-id"];
     this.cookiesPath = options.cookiesPath || COOKIES_PATH;
     this.autoRefresh = options.autoRefresh ?? true;
+    this.notificationCallback = options.notificationCallback;
     this.baseParams = {
       asset: "ALL",
       tempLink: "false",
@@ -87,10 +94,15 @@ export class AmazonClient {
   static async fromFile(
     cookiePath = COOKIES_PATH,
     autoRefresh = true,
+    notificationCallback?: NotificationCallback,
   ): Promise<AmazonClient> {
     const raw = await fs.readFile(cookiePath, "utf-8");
     const cookies = JSON.parse(raw) as AmazonCookies;
-    return new AmazonClient(cookies, { cookiesPath: cookiePath, autoRefresh });
+    return new AmazonClient(cookies, {
+      cookiesPath: cookiePath,
+      autoRefresh,
+      notificationCallback,
+    });
   }
 
   /**
@@ -239,6 +251,10 @@ export class AmazonClient {
         logger.warn(
           { status: response.status },
           "Token refresh failed — manual re-authentication required",
+        );
+        await this.notificationCallback?.(
+          "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+          "error",
         );
         return false;
       }
