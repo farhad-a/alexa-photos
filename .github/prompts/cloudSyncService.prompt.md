@@ -139,8 +139,8 @@ npm run build && npm start
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [x] **CI pipeline**: GitHub Actions and Gitea workflows to lint, type-check, and run tests on push
 - [x] **Cookie refresh automation**: Automatically refreshes Amazon `at-main` token using `sess-at-main`/`sst-main` session cookies when 401 is encountered
+- [x] **Metrics / health endpoint**: HTTP endpoints `/health` and `/metrics` for Docker health checks and monitoring. Tracks sync status, uptime, and authentication state.
 - [ ] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
 - [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)
-- [ ] **Metrics / health endpoint**: Add a simple HTTP health endpoint for Docker health checks and monitoring
 - [ ] **Cookie expiry alerting**: Detect refresh failures and send a notification (email, push) to re-authenticate

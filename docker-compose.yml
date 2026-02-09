@@ -4,8 +4,16 @@ services:
     build: .
     # For production, use released image:
     # image: git.home.alaghband.com/farhad/alexa-photos:latest
+    ports:
+      - "3000:3000" # Health endpoint
     volumes:
       - ./data:/app/data
     env_file:
       - .env
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

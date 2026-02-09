@@ -35,4 +35,7 @@ COPY --from=builder /app/dist/ ./dist/
 # Create data directory (host should mount volume here)
 RUN mkdir -p /app/data
 
+# Expose health endpoint
+EXPOSE 3000
+
 CMD ["node", "dist/index.js"]

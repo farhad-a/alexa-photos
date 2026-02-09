@@ -11,6 +11,7 @@ const configSchema = z.object({
     .number()
     .default(60)
     .transform((s) => s * 1000),
+  healthPort: z.coerce.number().default(3000),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -25,6 +26,7 @@ function loadConfig(): Config {
     amazonAutoRefreshCookies: process.env.AMAZON_AUTO_REFRESH_COOKIES,
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
+    healthPort: process.env.HEALTH_PORT,
     logLevel: process.env.LOG_LEVEL,
   });
 }

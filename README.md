@@ -163,6 +163,53 @@ npm test           # Run tests in watch mode
 
 > **Append-only mode**: Set `SYNC_DELETIONS=false` to preserve all photos in Amazon Photos, even when removed from iCloud.
 
+## Health & Monitoring
+
+The service exposes HTTP endpoints for health checks and metrics:
+
+### Health Endpoint
+
+```bash
+curl http://localhost:3000/health
+```
+
+Returns:
+
+```json
+{
+  "status": "healthy",
+  "uptime": 3600,
+  "timestamp": "2026-02-09T10:00:00.000Z"
+}
+```
+
+### Metrics Endpoint
+
+```bash
+curl http://localhost:3000/metrics
+```
+
+Returns detailed metrics:
+
+```json
+{
+  "status": "healthy",
+  "uptime": 3600,
+  "lastSync": {
+    "timestamp": "2026-02-09T10:00:00.000Z",
+    "durationMs": 1234,
+    "photosAdded": 5,
+    "photosRemoved": 0,
+    "success": true
+  },
+  "totalSyncs": 60,
+  "totalErrors": 0,
+  "amazonAuthenticated": true
+}
+```
+
+**Docker health check**: The compose file includes automatic health checks using the `/health` endpoint.
+
 ## Troubleshooting
 
 ### Amazon Cookies Expired

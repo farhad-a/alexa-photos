@@ -4,16 +4,39 @@ import { StateStore, PhotoMapping } from "../state/store.js";
 import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 
+export interface SyncMetrics {
+  lastSync?: {
+    timestamp: Date;
+    durationMs: number;
+    photosAdded: number;
+    photosRemoved: number;
+    success: boolean;
+    error?: string;
+  };
+  totalSyncs: number;
+  totalErrors: number;
+  amazonAuthenticated: boolean;
+}
+
 export class SyncEngine {
   private icloud: ICloudClient;
   private amazon: AmazonClient | null = null;
   private state: StateStore;
   private isRunning = false;
   private albumId: string | null = null;
+  private metrics: SyncMetrics = {
+    totalSyncs: 0,
+    totalErrors: 0,
+    amazonAuthenticated: false,
+  };
 
   constructor(icloud: ICloudClient) {
     this.icloud = icloud;
     this.state = new StateStore();
+  }
+
+  getMetrics(): SyncMetrics {
+    return { ...this.metrics };
   }
 
   async run(): Promise<void> {
@@ -23,6 +46,9 @@ export class SyncEngine {
     }
 
     this.isRunning = true;
+    const startTime = Date.now();
+    let photosAdded = 0;
+    let photosRemoved = 0;
 
     try {
       logger.info("Starting sync");
@@ -61,12 +87,14 @@ export class SyncEngine {
       // Process additions
       for (const photo of toAdd) {
         await this.addPhoto(photo);
+        photosAdded++;
       }
 
       // Process removals (if enabled)
       if (toRemove.length > 0) {
         if (config.syncDeletions) {
           await this.removePhotos(toRemove);
+          photosRemoved = toRemove.length;
         } else {
           logger.info(
             { count: toRemove.length },
@@ -76,8 +104,30 @@ export class SyncEngine {
       }
 
       logger.info("Sync complete");
+
+      // Update metrics on success
+      this.metrics.lastSync = {
+        timestamp: new Date(),
+        durationMs: Date.now() - startTime,
+        photosAdded,
+        photosRemoved,
+        success: true,
+      };
+      this.metrics.totalSyncs++;
     } catch (error) {
       logger.error({ error }, "Sync failed");
+
+      // Update metrics on error
+      this.metrics.lastSync = {
+        timestamp: new Date(),
+        durationMs: Date.now() - startTime,
+        photosAdded,
+        photosRemoved,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      this.metrics.totalErrors++;
+
       throw error;
     } finally {
       this.isRunning = false;
@@ -99,6 +149,7 @@ export class SyncEngine {
         );
       }
       logger.debug("Amazon Photos client authenticated");
+      this.metrics.amazonAuthenticated = true;
     }
 
     if (!this.albumId) {
