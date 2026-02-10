@@ -145,7 +145,7 @@ npm run build && npm start
 - [x] **Write tests**: 86 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
-- [x] **CI pipeline**: GitHub Actions and Gitea workflows to lint, type-check, and run tests on push
+- [x] **CI/CD pipeline**: GitHub Actions workflows for automated testing, building, and releases
 - [x] **Cookie refresh automation**: Automatically refreshes Amazon `at-main` token using `sess-at-main`/`sst-main` session cookies when 401 is encountered
 - [x] **Metrics / health endpoint**: HTTP endpoints `/health` and `/metrics` for Docker health checks and monitoring. Tracks sync status, uptime, and authentication state.
 - [x] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show

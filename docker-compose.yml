@@ -3,7 +3,7 @@ services:
     # For local development, build from source
     build: .
     # For production, use released image:
-    # image: git.home.alaghband.com/farhad/alexa-photos:latest
+    # image: ghcr.io/farhad-a/alexa-photos:latest
     ports:
       - "3000:3000" # Health endpoint
     volumes:

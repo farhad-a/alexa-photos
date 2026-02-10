@@ -23,43 +23,40 @@
    git push origin v1.0.1
    ```
 
-4. **Automated workflow** (`.gitea/workflows/release.yml`) will:
+4. **Automated workflow** (`.github/workflows/release.yml`) will:
    - Run tests (format, lint, build, tests)
    - Build multi-stage Docker image
-   - Push to Gitea Container Registry with tags:
+   - Push to GitHub Container Registry with tags:
      - `latest`
      - `1.0.1` (semantic version)
      - `1` (major version)
-   - Create a Gitea Release with notes
+   - Create a GitHub Release with notes
 
-## Gitea Secrets Configuration
+## GitHub Configuration
 
-Set these secrets in Gitea repository settings (Settings → Actions → Secrets):
+The workflow uses GitHub's built-in `GITHUB_TOKEN` which is automatically provided.
 
-- `GITEA_USERNAME` - Your Gitea username
-- `GITEA_TOKEN` - Personal access token with these scopes:
-  - `write:packages` - To push Docker images to container registry
-  - `write:repository` - To create releases
+For pushing to GitHub Container Registry, ensure:
 
-To create a token:
-
-1. Go to User Settings → Applications → Access Tokens
-2. Generate New Token
-3. Select the required scopes above
-4. Copy the token and add it to repository secrets
+1. Go to repository Settings → Actions → General
+2. Under "Workflow permissions", select:
+   - "Read and write permissions"
+   - Check "Allow GitHub Actions to create and approve pull requests"
+3. Go to your GitHub profile → Settings → Developer settings → Personal access tokens → Tokens (classic)
+4. Generate a new token (if needed for manual operations) with `write:packages` scope
 
 ## Using Released Images
 
 ### Pull latest version:
 
 ```bash
-docker pull git.home.alaghband.com/farhad/alexa-photos:latest
+docker pull ghcr.io/farhad-a/alexa-photos:latest
 ```
 
 ### Pull specific version:
 
 ```bash
-docker pull git.home.alaghband.com/farhad/alexa-photos:1.0.1
+docker pull ghcr.io/farhad-a/alexa-photos:1.0.1
 ```
 
 ### Update docker-compose.yml:
@@ -67,7 +64,7 @@ docker pull git.home.alaghband.com/farhad/alexa-photos:1.0.1
 ```yaml
 services:
   sync:
-    image: git.home.alaghband.com/farhad/alexa-photos:latest
+    image: ghcr.io/farhad-a/alexa-photos:latest
     volumes:
       - ./data:/app/data
     env_file:

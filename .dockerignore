@@ -1,7 +1,6 @@
 # Git
 .git
 .gitignore
-.gitea
 
 # Node
 node_modules

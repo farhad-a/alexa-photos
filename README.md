@@ -1,6 +1,6 @@
 # Alexa Photos Sync
 
-[![CI](https://git.home.alaghband.com/farhad/alexa-photos/actions/workflows/ci.yml/badge.svg)](https://git.home.alaghband.com/farhad/alexa-photos/actions)
+[![CI](https://github.com/farhad-a/alexa-photos/actions/workflows/ci.yml/badge.svg)](https://github.com/farhad-a/alexa-photos/actions)
 
 Sync photos from an iCloud shared album to Amazon Photos for display on Echo Show devices.
 
@@ -62,16 +62,16 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 
 ### Production Deployment
 
-Using pre-built Docker images from Gitea Container Registry:
+Using pre-built Docker images from GitHub Container Registry:
 
 ```bash
 # Pull latest release
-docker pull git.home.alaghband.com/farhad/alexa-photos:latest
+docker pull ghcr.io/farhad-a/alexa-photos:latest
 
 # Or use docker-compose.yml with registry image
 services:
   sync:
-    image: git.home.alaghband.com/farhad/alexa-photos:latest
+    image: ghcr.io/farhad-a/alexa-photos:latest
     volumes:
       - ./data:/app/data
     env_file:
@@ -138,7 +138,7 @@ npm run lint:fix   # Auto-fix lint issues (limited)
 npm test           # Run tests in watch mode
 ```
 
-> **GitHub Actions**: A CI workflow is configured in `.github/workflows/ci.yml` for GitHub repositories. For self-hosted git servers, run the CI commands in your preferred CI system.
+> **GitHub Actions**: Full CI/CD workflows are configured in `.github/workflows/` for automated testing and releases.
 
 ## Environment Variables
 
