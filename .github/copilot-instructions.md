@@ -34,12 +34,14 @@ src/
 - **ICloudClient**: Stateless, uses public shared album API endpoints
   - Partition discovery via 330 redirect with `X-Apple-MMe-Host` header
   - Photo downloads with exponential backoff retry (configurable max retries)
+  - Date parsing handles both ISO strings and Apple epoch (seconds since 2001-01-01)
 - **AmazonClient**: REST API client using Amazon Drive v1 endpoints
   - Auth via cookies stored in `./data/amazon-cookies.json`
   - Base URL: `https://www.amazon.{tld}/drive/v1`
   - Upload via cdproxy: `https://content-na.drive.amazonaws.com/cdproxy/nodes`
   - Base params: `{ asset: 'ALL', tempLink: 'false', resourceVersion: 'V2', ContentType: 'JSON' }`
-  - Auto-detects TLD from cookie key names (US: `_main`, intl: `at-acb{tld}`)
+  - Auto-detects TLD from cookie key names (US: `at-main`/`at_main`, intl: `at-acb{tld}`)
+  - Required US cookies: `session-id`, `ubid-main`, `at-main`, `x-main`, `sess-at-main`, `sst-main`
 
 ### Sync Logic (`SyncEngine`)
 
@@ -77,3 +79,4 @@ npm run notifications:test
 - Amazon cookies expire periodically — re-run `npm run amazon:setup` when needed
 - iCloud public API has no webhooks — polling is the only option
 - Dockerfile uses `node:20-slim` (no browser dependencies needed)
+- Amazon may return 503 from datacenter IPs (cloud VMs, Codespaces) — works fine from residential IPs
