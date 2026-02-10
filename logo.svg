@@ -1,53 +1,68 @@
-<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background circle -->
-  <circle cx="100" cy="100" r="95" fill="#f0f9ff" stroke="#0284c7" stroke-width="2"/>
-  
-  <!-- iCloud cloud (left, blue) -->
-  <g transform="translate(35, 60)">
-    <ellipse cx="20" cy="15" rx="15" ry="12" fill="#147ce5"/>
-    <ellipse cx="35" cy="15" rx="18" ry="14" fill="#147ce5"/>
-    <ellipse cx="50" cy="15" rx="13" ry="10" fill="#147ce5"/>
-    <rect x="20" y="15" width="30" height="15" fill="#147ce5"/>
-    <ellipse cx="35" cy="30" rx="25" ry="8" fill="#147ce5"/>
+<svg width="256" height="256" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="deviceShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.25"/>
+    </filter>
+
+    <clipPath id="screenClip">
+      <rect x="40" y="42" width="120" height="106" rx="8" />
+    </clipPath>
+  </defs>
+
+  <!-- Echo Show device frame (big container) -->
+  <!-- Base shadow (helps the bottom edge read correctly) -->
+  <ellipse cx="100" cy="174" rx="58" ry="8" fill="#0f172a" fill-opacity="0.18"/>
+
+  <g filter="url(#deviceShadow)">
+    <!-- Device body -->
+    <rect x="30" y="30" width="140" height="140" rx="14" fill="#1e293b"/>
+
+    <!-- Screen (slightly inset) -->
+    <rect x="40" y="42" width="120" height="106" rx="8" fill="#e0f2fe" stroke="#0f172a" stroke-opacity="0.15"/>
+
+    <!-- Device chin (subtle, not attached to the screen border) -->
+    <rect x="44" y="154" width="112" height="10" rx="5" fill="#0f172a" fill-opacity="0.16"/>
+    <circle cx="70" cy="159" r="1.9" fill="#0f172a" fill-opacity="0.26"/>
+    <circle cx="84" cy="159" r="1.9" fill="#0f172a" fill-opacity="0.26"/>
+    <circle cx="98" cy="159" r="1.9" fill="#0f172a" fill-opacity="0.26"/>
   </g>
-  
-  <!-- Amazon cloud (right, orange) -->
-  <g transform="translate(105, 60)">
-    <ellipse cx="20" cy="15" rx="15" ry="12" fill="#ff9900"/>
-    <ellipse cx="35" cy="15" rx="18" ry="14" fill="#ff9900"/>
-    <ellipse cx="50" cy="15" rx="13" ry="10" fill="#ff9900"/>
-    <rect x="20" y="15" width="30" height="15" fill="#ff9900"/>
-    <ellipse cx="35" cy="30" rx="25" ry="8" fill="#ff9900"/>
-  </g>
-  
-  <!-- Sync arrow pointing right -->
-  <g transform="translate(85, 85)">
-    <line x1="0" y1="0" x2="30" y2="0" stroke="#10b981" stroke-width="4" stroke-linecap="round"/>
-    <polygon points="30,0 22,-6 22,6" fill="#10b981"/>
-  </g>
-  
-  <!-- Photo frames in center -->
-  <g transform="translate(75, 120)">
-    <!-- Frame 1 -->
-    <rect x="0" y="0" width="20" height="16" rx="2" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
-    <circle cx="7" cy="6" r="3" fill="#fbbf24"/>
-    <polygon points="3,14 8,9 12,12 17,7 17,14" fill="#0ea5e9"/>
-    
-    <!-- Frame 2 (overlapping) -->
-    <rect x="15" y="5" width="20" height="16" rx="2" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
-    <circle cx="22" cy="11" r="3" fill="#fbbf24"/>
-    <polygon points="18,19 23,14 27,17 32,12 32,19" fill="#0ea5e9"/>
-    
-    <!-- Frame 3 (overlapping) -->
-    <rect x="30" y="10" width="20" height="16" rx="2" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
-    <circle cx="37" cy="16" r="3" fill="#fbbf24"/>
-    <polygon points="33,24 38,19 42,22 47,17 47,24" fill="#0ea5e9"/>
-  </g>
-  
-  <!-- Echo Show device silhouette at bottom -->
-  <g transform="translate(70, 160)">
-    <rect x="0" y="0" width="60" height="30" rx="4" fill="#1e293b"/>
-    <rect x="5" y="5" width="50" height="20" rx="2" fill="#334155"/>
-    <ellipse cx="30" cy="33" rx="20" ry="3" fill="#1e293b" opacity="0.3"/>
+
+  <!-- Screen contents (clipped) -->
+  <g clip-path="url(#screenClip)">
+    <!-- iCloud cloud (top, blue) with photo frame inside -->
+    <g transform="translate(55, 46) scale(0.92)">
+      <!-- Cloud shape (scaled up for legibility) -->
+      <ellipse cx="25" cy="20" rx="22" ry="16" fill="#147ce5"/>
+      <ellipse cx="50" cy="16" rx="26" ry="20" fill="#147ce5"/>
+      <ellipse cx="75" cy="20" rx="20" ry="15" fill="#147ce5"/>
+      <rect x="25" y="20" width="50" height="18" fill="#147ce5"/>
+      <ellipse cx="50" cy="38" rx="45" ry="12" fill="#147ce5"/>
+
+      <!-- Photo frame inside cloud (bigger + simpler) -->
+      <rect x="40" y="18" width="22" height="16" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="47" cy="23" r="2.6" fill="#fbbf24"/>
+      <polygon points="42,32 48,26 52,29 60,22 60,32" fill="#0ea5e9"/>
+    </g>
+
+    <!-- Amazon cloud (bottom, orange) with photo frame inside -->
+    <g transform="translate(55, 101) scale(0.92)">
+      <!-- Cloud shape -->
+      <ellipse cx="25" cy="20" rx="22" ry="16" fill="#ff9900"/>
+      <ellipse cx="50" cy="16" rx="26" ry="20" fill="#ff9900"/>
+      <ellipse cx="75" cy="20" rx="20" ry="15" fill="#ff9900"/>
+      <rect x="25" y="20" width="50" height="18" fill="#ff9900"/>
+      <ellipse cx="50" cy="38" rx="45" ry="12" fill="#ff9900"/>
+
+      <!-- Photo frame inside cloud -->
+      <rect x="40" y="18" width="22" height="16" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="47" cy="23" r="2.6" fill="#fbbf24"/>
+      <polygon points="42,32 48,26 52,29 60,22 60,32" fill="#0ea5e9"/>
+    </g>
+
+    <!-- Sync arrow pointing down (drawn on top so it stays visible) -->
+    <g transform="translate(100, 82)">
+      <path d="M 0 0 L 0 30" stroke="#10b981" stroke-width="5" stroke-linecap="butt" fill="none"/>
+      <polygon points="0,34 -7,24 7,24" fill="#10b981"/>
+    </g>
   </g>
 </svg>
