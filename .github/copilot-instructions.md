@@ -10,7 +10,7 @@ src/
 ├── amazon/client.ts   # Amazon Photos REST API client (cookie-based auth)
 ├── sync/engine.ts     # Orchestrates diff detection and sync operations
 ├── state/store.ts     # SQLite mappings: icloud_id ↔ amazon_id
-└── lib/               # Config (Zod), logging (pino)
+└── lib/               # Config (Zod), logging (pino), notifications
 ```
 
 ## Key Patterns
@@ -20,6 +20,14 @@ src/
 - All config via environment variables, validated with **Zod** in `src/lib/config.ts`
 - Use `z.coerce` for numbers from env vars
 - Export singleton `config` object, not factory functions
+
+#### Notifications
+
+- Notifications are optional and configured via env vars:
+  - `ALERT_WEBHOOK_URL` (generic JSON webhook)
+  - `PUSHOVER_TOKEN` / `PUSHOVER_USER` (native Pushover)
+- Implementation lives in `src/lib/notifications.ts` (`NotificationService`)
+- Cookie refresh failures trigger alerts via a callback wired from `SyncEngine` → `AmazonClient`
 
 ### Platform Clients
 
@@ -58,6 +66,9 @@ npm run amazon:setup
 
 # Run sync service in watch mode
 npm run dev
+
+# Test notifications (webhook and/or Pushover) using .env
+npm run notifications:test
 ```
 
 ## Important Notes

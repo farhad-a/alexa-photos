@@ -15,15 +15,16 @@ Data flow: iCloud Shared Album → SyncEngine → Amazon Photos (Echo Show album
 State: SQLite tracks icloud_id ↔ amazon_id mappings
 
 src/
-├── icloud/client.ts   # iCloud shared album public API (no auth required)
-├── icloud/test.ts     # Standalone test script for iCloud fetch
-├── amazon/client.ts   # Amazon Photos REST API (cookie-based auth)
-├── amazon/login.ts    # Interactive CLI to save browser cookies
-├── sync/engine.ts     # Set-based diff → add/remove photos
-├── state/store.ts     # SQLite: icloud_id ↔ amazon_id mappings
-├── lib/config.ts      # Zod-validated env config
-├── lib/logger.ts      # pino structured logging
-└── index.ts           # Entry point with polling loop + graceful shutdown
+├── icloud/client.ts      # iCloud shared album public API (no auth required)
+├── icloud/test.ts        # Standalone test script for iCloud fetch
+├── amazon/client.ts      # Amazon Photos REST API (cookie-based auth)
+├── amazon/login.ts       # Interactive CLI to save browser cookies
+├── sync/engine.ts        # Set-based diff → add/remove photos
+├── state/store.ts        # SQLite: icloud_id ↔ amazon_id mappings
+├── lib/config.ts         # Zod-validated env config
+├── lib/logger.ts         # pino structured logging
+├── lib/notifications.ts  # Optional alerting (webhook + Pushover)
+└── index.ts              # Entry point with polling loop + graceful shutdown
 ```
 
 ## Platform Clients
@@ -86,9 +87,13 @@ All env vars validated with Zod in `src/lib/config.ts`:
 | `ICLOUD_DOWNLOAD_MAX_RETRIES` | ❌       | `3`                          | Max retry attempts for photo downloads        |
 | `AMAZON_COOKIES_PATH`         | ❌       | `./data/amazon-cookies.json` | Path to cookies JSON                          |
 | `AMAZON_ALBUM_NAME`           | ❌       | `Echo Show`                  | Target album name in Amazon Photos            |
+| `AMAZON_AUTO_REFRESH_COOKIES` | ❌       | `true`                       | Auto-refresh auth cookies on 401              |
 | `SYNC_DELETIONS`              | ❌       | `true`                       | Delete from Amazon when removed from iCloud   |
 | `POLL_INTERVAL_SECONDS`       | ❌       | `60`                         | Polling interval (converted to ms internally) |
 | `LOG_LEVEL`                   | ❌       | `info`                       | pino log level                                |
+| `ALERT_WEBHOOK_URL`           | ❌       | —                            | Optional JSON webhook for alerts              |
+| `PUSHOVER_TOKEN`              | ❌       | —                            | Optional Pushover app token                   |
+| `PUSHOVER_USER`               | ❌       | —                            | Optional Pushover user key                    |
 
 ## Development Workflow
 
@@ -102,6 +107,9 @@ ICLOUD_ALBUM_TOKEN=xxx npm run icloud:test
 # Save Amazon cookies (interactive CLI, one-time setup)
 npm run amazon:setup
 
+# Test notifications (webhook and/or Pushover) using .env
+npm run notifications:test
+
 # Run sync service in watch mode
 npm run dev
 
@@ -114,7 +122,7 @@ npm run build && npm start
 - **Dockerfile**: `node:20-slim` — no browser dependencies needed
 - **docker-compose.yml**: Mounts `./data` volume, reads `.env`, restarts unless stopped
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
-- **Cookie expiry**: Amazon cookies expire periodically — re-run `npm run amazon:setup` when needed
+- **Cookie expiry**: Service attempts auto-refresh using `sess-at-main`/`sst-main`. If refresh fails, it can alert via webhook/Pushover and you'll need to re-run `npm run amazon:setup`.
 
 ## Key Design Decisions
 
@@ -140,7 +148,7 @@ npm run build && npm start
 - [x] **CI pipeline**: GitHub Actions and Gitea workflows to lint, type-check, and run tests on push
 - [x] **Cookie refresh automation**: Automatically refreshes Amazon `at-main` token using `sess-at-main`/`sst-main` session cookies when 401 is encountered
 - [x] **Metrics / health endpoint**: HTTP endpoints `/health` and `/metrics` for Docker health checks and monitoring. Tracks sync status, uptime, and authentication state.
-- [ ] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
+- [x] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
 - [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)
-- [ ] **Cookie expiry alerting**: Detect refresh failures and send a notification (email, push) to re-authenticate
+- [x] **Cookie expiry alerting**: Detect refresh failures and send a notification (webhook, Pushover) to re-authenticate
