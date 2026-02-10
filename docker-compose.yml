@@ -1,9 +1,9 @@
 services:
   sync:
     # For local development, build from source
-    build: .
+    # build: .
     # For production, use released image:
-    # image: ghcr.io/farhad-a/alexa-photos:latest
+    image: ghcr.io/farhad-a/alexa-photos:latest
     ports:
       - "3000:3000" # Health endpoint
     volumes:

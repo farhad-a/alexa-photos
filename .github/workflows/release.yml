@@ -59,7 +59,7 @@ jobs:
             ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.MAJOR }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
 
       - name: Create Release Notes
         id: release_notes
