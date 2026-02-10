@@ -20,9 +20,9 @@ echo -e "${GREEN}Current version: ${CURRENT_VERSION}${NC}"
 # Ask for version bump type
 echo ""
 echo "Select version bump type:"
-echo "  1) patch (${CURRENT_VERSION} → $(npm version patch --no-git-tag-version --dry-run 2>&1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | sed 's/v//'))"
-echo "  2) minor (${CURRENT_VERSION} → $(npm version minor --no-git-tag-version --dry-run 2>&1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | sed 's/v//'))"
-echo "  3) major (${CURRENT_VERSION} → $(npm version major --no-git-tag-version --dry-run 2>&1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | sed 's/v//'))"
+echo "  1) patch (${CURRENT_VERSION} → $(npx semver $(npm pkg get version | tr -d '"') -i patch 2>&1))"
+echo "  2) minor (${CURRENT_VERSION} → $(npx semver $(npm pkg get version | tr -d '"') -i minor 2>&1))"
+echo "  3) major (${CURRENT_VERSION} → $(npx semver $(npm pkg get version | tr -d '"') -i major 2>&1))"
 read -p "Enter choice (1-3): " choice
 
 case $choice in
@@ -60,4 +60,4 @@ git push origin main --follow-tags
 echo ""
 echo -e "${GREEN}✓ Release ${NEW_VERSION} initiated!${NC}"
 echo -e "${GREEN}✓ GitHub workflow will build and push Docker image.${NC}"
-echo -e "${GREEN}✓ Check: https://git.home.alaghband.com/farhad/alexa-photos/actions${NC}"
+echo -e "${GREEN}✓ Check: https://github.com/farhad-a/alexa-photos/actions${NC}"
