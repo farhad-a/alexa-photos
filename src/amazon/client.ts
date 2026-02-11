@@ -514,6 +514,7 @@ export class AmazonClient {
 
   /** Add nodes to an existing album */
   async addToAlbum(albumId: string, nodeIds: string[]): Promise<void> {
+    if (nodeIds.length === 0) return;
     await this.request("PATCH", `${this.driveUrl}/nodes/${albumId}/children`, {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -524,6 +525,34 @@ export class AmazonClient {
       }),
     });
     logger.debug({ albumId, count: nodeIds.length }, "Added to album");
+  }
+
+  /** Add nodes to album only if they're not already present (prevents duplicates) */
+  async addToAlbumIfNotPresent(
+    albumId: string,
+    nodeIds: string[],
+  ): Promise<{ added: number; skipped: number }> {
+    if (nodeIds.length === 0) return { added: 0, skipped: 0 };
+
+    // Fetch current album contents
+    const existingIds = new Set(await this.getAlbumNodeIds(albumId));
+
+    // Filter out nodes already in the album
+    const toAdd = nodeIds.filter((id) => !existingIds.has(id));
+    const skipped = nodeIds.length - toAdd.length;
+
+    if (skipped > 0) {
+      logger.info(
+        { albumId, skipped, total: nodeIds.length },
+        "Skipping nodes already in album",
+      );
+    }
+
+    if (toAdd.length > 0) {
+      await this.addToAlbum(albumId, toAdd);
+    }
+
+    return { added: toAdd.length, skipped };
   }
 
   /** Remove nodes from an album (does not delete them) */
@@ -568,14 +597,14 @@ export class AmazonClient {
     return ids;
   }
 
-  /** Upload a photo and immediately add it to an album. Returns the node ID. */
+  /** Upload a photo and safely add it to an album (skips if already present). Returns the node ID. */
   async uploadPhotoToAlbum(
     buffer: Buffer,
     filename: string,
     albumId: string,
   ): Promise<string> {
     const node = await this.uploadPhoto(buffer, filename);
-    await this.addToAlbum(albumId, [node.id]);
+    await this.addToAlbumIfNotPresent(albumId, [node.id]);
     return node.id;
   }
 

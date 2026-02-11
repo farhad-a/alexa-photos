@@ -56,6 +56,8 @@ src/
   - `createAlbum(name)` → POST `/nodes` with `kind: VISUAL_COLLECTION`
   - `uploadPhoto(buffer, filename)` → POST to cdproxy (handles 409 duplicate)
   - `addToAlbum()` / `removeFromAlbum()` → PATCH `/nodes/{albumId}/children` with `op: add|remove`
+  - `addToAlbumIfNotPresent()` → checks album contents before adding, prevents duplicates (returns `{ added, skipped }`)
+  - `getAlbumNodeIds()` → paginated fetch of all node IDs in an album
   - `trash()` → PATCH `/trash` (batched, max 50)
   - `purge()` → POST `/bulk/nodes/purge`
   - `deleteNodes()` → trash then purge
@@ -142,13 +144,14 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [x] **Write tests**: 86 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
+- [x] **Write tests**: 90 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [x] **CI/CD pipeline**: GitHub Actions workflows for automated testing, building, and releases
 - [x] **Cookie refresh automation**: Automatically refreshes Amazon `at-main` token using `sess-at-main`/`sst-main` session cookies when 401 is encountered
 - [x] **Metrics / health endpoint**: HTTP endpoints `/health` and `/metrics` for Docker health checks and monitoring. Tracks sync status, uptime, and authentication state.
 - [x] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
+- [x] **Album duplicate prevention**: `addToAlbumIfNotPresent()` checks album contents before adding nodes, preventing duplicates if state.db is lost/deleted
+- [x] **Cookie expiry alerting**: Detect refresh failures and send a notification (webhook, Pushover) to re-authenticate
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
 - [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)
-- [x] **Cookie expiry alerting**: Detect refresh failures and send a notification (webhook, Pushover) to re-authenticate

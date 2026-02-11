@@ -477,4 +477,92 @@ describe("AmazonClient", () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });
+
+  describe("addToAlbumIfNotPresent", () => {
+    it("adds nodes that are not already in the album", async () => {
+      const client = new AmazonClient(makeUsCookies());
+
+      // Mock getAlbumNodeIds - album already contains node-1 and node-2
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [{ id: "node-1" }, { id: "node-2" }],
+        }),
+      });
+
+      // Mock addToAlbum (PATCH request) - should only add node-3
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.addToAlbumIfNotPresent("album-123", [
+        "node-1",
+        "node-2",
+        "node-3",
+      ]);
+
+      expect(result).toEqual({ added: 1, skipped: 2 });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Verify the PATCH was called with only node-3
+      const patchCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(patchCall[1]?.body as string);
+      expect(body.value).toEqual(["node-3"]);
+    });
+
+    it("skips all nodes if they're already in the album", async () => {
+      const client = new AmazonClient(makeUsCookies());
+
+      // Mock getAlbumNodeIds - album already contains all nodes
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [{ id: "node-1" }, { id: "node-2" }],
+        }),
+      });
+
+      const result = await client.addToAlbumIfNotPresent("album-123", [
+        "node-1",
+        "node-2",
+      ]);
+
+      expect(result).toEqual({ added: 0, skipped: 2 });
+      // Should only call getAlbumNodeIds, not addToAlbum
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("adds all nodes if album is empty", async () => {
+      const client = new AmazonClient(makeUsCookies());
+
+      // Mock getAlbumNodeIds - empty album
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
+
+      // Mock addToAlbum
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.addToAlbumIfNotPresent("album-123", [
+        "node-1",
+        "node-2",
+      ]);
+
+      expect(result).toEqual({ added: 2, skipped: 0 });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("handles empty nodeIds array", async () => {
+      const client = new AmazonClient(makeUsCookies());
+
+      const result = await client.addToAlbumIfNotPresent("album-123", []);
+
+      expect(result).toEqual({ added: 0, skipped: 0 });
+      expect(mockFetch).toHaveBeenCalledTimes(0);
+    });
+  });
 });
