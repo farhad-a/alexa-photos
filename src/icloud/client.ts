@@ -79,11 +79,13 @@ export class ICloudClient {
 
     // Map photos with their download URLs
     const photos: ICloudPhoto[] = webstream.photos.map((photo: any) => {
-      // Find the best quality derivative
+      // Find the best quality derivative by total resolution (width × height)
       const derivatives = Object.entries(photo.derivatives || {});
       const best = derivatives.reduce(
         (prev: any, [key, val]: [string, any]) => {
-          if (!prev || val.width > prev[1].width) return [key, val];
+          const currentResolution = val.width * val.height;
+          const prevResolution = prev ? prev[1].width * prev[1].height : 0;
+          if (currentResolution > prevResolution) return [key, val];
           return prev;
         },
         null,
