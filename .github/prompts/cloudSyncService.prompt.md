@@ -67,7 +67,8 @@ src/
 ### SyncEngine (`src/sync/engine.ts`)
 
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
-- **Additions**: download from iCloud → upload to Amazon → add to album → save mapping
+- **Additions**: check checksum for existing content → if found, reuse Amazon node + add to album → else download from iCloud → upload to Amazon → add to album → save mapping
+- **Checksum dedup**: Queries `StateStore.getMappingByChecksum()` before uploading — avoids re-uploading when photo GUID changes but content is identical
 - **Removals**: remove from album → trash → purge → delete mapping
 - **Lazy init**: Amazon client created only when there's work to do
 - **Concurrency guard**: `isRunning` flag prevents overlapping runs
@@ -78,6 +79,7 @@ src/
 - **SQLite** via `better-sqlite3`
 - **Table**: `photo_mappings` (icloud_id PK, icloud_checksum, amazon_id, synced_at)
 - **Indexes**: `amazon_id`, `icloud_checksum`
+- **Key methods**: `getMappingByChecksum()` for deduplication, `addMapping()` with INSERT OR REPLACE
 
 ## Configuration
 
@@ -144,7 +146,7 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [x] **Write tests**: 90 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
+- [x] **Write tests**: 93 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [x] **CI/CD pipeline**: GitHub Actions workflows for automated testing, building, and releases
@@ -153,5 +155,5 @@ npm run build && npm start
 - [x] **End-to-end sync test**: Run a full sync cycle against real accounts and verify photos appear on Echo Show
 - [x] **Album duplicate prevention**: `addToAlbumIfNotPresent()` checks album contents before adding nodes, preventing duplicates if state.db is lost/deleted
 - [x] **Cookie expiry alerting**: Detect refresh failures and send a notification (webhook, Pushover) to re-authenticate
+- [x] **Checksum dedup**: Uses `icloud_checksum` to avoid re-uploading identical content when photo GUID changes (e.g., re-shared). Reuses existing Amazon node and adds new mapping.
 - [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
-- [ ] **Checksum dedup**: Use `icloud_checksum` to avoid re-uploading identical content when a photo GUID changes (e.g. re-shared)

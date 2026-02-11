@@ -168,24 +168,47 @@ export class SyncEngine {
     logger.info({ photoId: photo.id }, "Adding photo");
 
     try {
-      // Download from iCloud with retry
-      const buffer = await this.icloud.downloadPhoto(
-        photo,
-        config.icloudDownloadMaxRetries,
-      );
+      // Check if we already have a photo with this checksum (deduplication)
+      const existing = this.state.getMappingByChecksum(photo.checksum);
 
-      // Generate a descriptive filename
-      const ext = "jpg"; // iCloud shared albums serve JPEG
-      const filename = `${photo.id}.${ext}`;
+      let amazonId: string;
 
-      // Upload to Amazon and add to album
-      const amazonId = await this.amazon!.uploadPhotoToAlbum(
-        buffer,
-        filename,
-        this.albumId!,
-      );
+      if (existing) {
+        // Reuse existing Amazon node instead of uploading again
+        logger.info(
+          {
+            photoId: photo.id,
+            existingPhotoId: existing.icloudId,
+            amazonId: existing.amazonId,
+            checksum: photo.checksum,
+          },
+          "Reusing existing photo (checksum match)",
+        );
 
-      // Save mapping
+        amazonId = existing.amazonId;
+
+        // Ensure the existing node is in the album
+        await this.amazon!.addToAlbumIfNotPresent(this.albumId!, [amazonId]);
+      } else {
+        // Download from iCloud with retry
+        const buffer = await this.icloud.downloadPhoto(
+          photo,
+          config.icloudDownloadMaxRetries,
+        );
+
+        // Generate a descriptive filename
+        const ext = "jpg"; // iCloud shared albums serve JPEG
+        const filename = `${photo.id}.${ext}`;
+
+        // Upload to Amazon and add to album
+        amazonId = await this.amazon!.uploadPhotoToAlbum(
+          buffer,
+          filename,
+          this.albumId!,
+        );
+      }
+
+      // Save mapping (creates new mapping or updates existing iCloud ID)
       this.state.addMapping({
         icloudId: photo.id,
         icloudChecksum: photo.checksum,

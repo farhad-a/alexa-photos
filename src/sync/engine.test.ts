@@ -44,6 +44,14 @@ vi.mock("../state/store.js", () => ({
         syncedAt: new Date(),
       }));
     }
+    getMappingByChecksum(checksum: string) {
+      for (const mapping of mockMappings.values()) {
+        if (mapping.icloudChecksum === checksum) {
+          return { ...mapping, syncedAt: new Date() };
+        }
+      }
+      return null;
+    }
     addMapping(m: {
       icloudId: string;
       icloudChecksum: string;
@@ -63,6 +71,9 @@ vi.mock("../amazon/client.js", () => {
   const mockCheckAuth = vi.fn().mockResolvedValue(true);
   const mockFindOrCreateAlbum = vi.fn().mockResolvedValue("album-123");
   const mockUploadPhotoToAlbum = vi.fn().mockResolvedValue("amazon-node-id");
+  const mockAddToAlbumIfNotPresent = vi
+    .fn()
+    .mockResolvedValue({ added: 1, skipped: 0 });
   const mockRemoveFromAlbum = vi.fn().mockResolvedValue(undefined);
   const mockDeleteNodes = vi.fn().mockResolvedValue(undefined);
   const mockClose = vi.fn().mockResolvedValue(undefined);
@@ -71,6 +82,7 @@ vi.mock("../amazon/client.js", () => {
     checkAuth: mockCheckAuth,
     findOrCreateAlbum: mockFindOrCreateAlbum,
     uploadPhotoToAlbum: mockUploadPhotoToAlbum,
+    addToAlbumIfNotPresent: mockAddToAlbumIfNotPresent,
     removeFromAlbum: mockRemoveFromAlbum,
     deleteNodes: mockDeleteNodes,
     close: mockClose,
@@ -167,6 +179,119 @@ describe("SyncEngine", () => {
         icloudId: "p1",
         icloudChecksum: "my-checksum",
         amazonId: "amazon-node-id",
+      });
+    });
+  });
+
+  describe("checksum deduplication", () => {
+    it("reuses existing Amazon node when checksum matches", async () => {
+      // Photo p1 was already synced
+      mockMappings.set("p1", {
+        icloudId: "p1",
+        icloudChecksum: "same-checksum",
+        amazonId: "existing-amazon-id",
+      });
+
+      // New photo p2 has the same content (same checksum)
+      const newPhoto = makePhoto("p2", "same-checksum");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([
+        makePhoto("p1", "same-checksum"),
+        newPhoto,
+      ]);
+
+      await engine.run();
+
+      const mock = getAmazonMock();
+
+      // Should NOT download or upload p2 (reuses existing)
+      expect(icloud.downloadPhoto).not.toHaveBeenCalled();
+      expect(mock.uploadPhotoToAlbum).not.toHaveBeenCalled();
+
+      // Should add existing node to album
+      expect(mock.addToAlbumIfNotPresent).toHaveBeenCalledWith("album-123", [
+        "existing-amazon-id",
+      ]);
+
+      // Should create new mapping for p2 pointing to same Amazon ID
+      const p2Mapping = mockMappings.get("p2");
+      expect(p2Mapping).toEqual({
+        icloudId: "p2",
+        icloudChecksum: "same-checksum",
+        amazonId: "existing-amazon-id",
+      });
+
+      // Both photos should be in mappings
+      expect(mockMappings.size).toBe(2);
+    });
+
+    it("uploads new photo when checksum is unique", async () => {
+      // Existing photo with different checksum
+      mockMappings.set("p1", {
+        icloudId: "p1",
+        icloudChecksum: "checksum-1",
+        amazonId: "az-1",
+      });
+
+      // New photo with unique checksum
+      const newPhoto = makePhoto("p2", "checksum-2");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([
+        makePhoto("p1", "checksum-1"),
+        newPhoto,
+      ]);
+
+      await engine.run();
+
+      const mock = getAmazonMock();
+
+      // Should download and upload p2 (unique content)
+      expect(icloud.downloadPhoto).toHaveBeenCalledTimes(1);
+      expect(mock.uploadPhotoToAlbum).toHaveBeenCalledTimes(1);
+
+      // p2 should get a new Amazon ID
+      const p2Mapping = mockMappings.get("p2");
+      expect(p2Mapping!.amazonId).toBe("amazon-node-id");
+    });
+
+    it("handles photo re-share scenario (same content, new ID)", async () => {
+      // User removes photo from iCloud album, then re-shares same photo
+      // Old ID: p1 with checksum-A → amazon-id-123
+      mockMappings.set("p1", {
+        icloudId: "p1",
+        icloudChecksum: "checksum-A",
+        amazonId: "amazon-id-123",
+      });
+
+      // Photo is gone from iCloud temporarily
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([]);
+      await engine.run();
+
+      // Photo removed from mappings
+      expect(mockMappings.has("p1")).toBe(false);
+
+      // User re-shares the same photo → iCloud assigns new ID p99
+      const resharedPhoto = makePhoto("p99", "checksum-A");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([resharedPhoto]);
+
+      // But old mapping still exists in another entry (simulating partial delete)
+      mockMappings.set("p1", {
+        icloudId: "p1",
+        icloudChecksum: "checksum-A",
+        amazonId: "amazon-id-123",
+      });
+
+      await engine.run();
+
+      const mock = getAmazonMock();
+
+      // Should NOT upload again (reuses existing node by checksum)
+      expect(mock.uploadPhotoToAlbum).not.toHaveBeenCalled();
+
+      // Should create mapping for new ID
+      const newMapping = mockMappings.get("p99");
+      expect(newMapping).toEqual({
+        icloudId: "p99",
+        icloudChecksum: "checksum-A",
+        amazonId: "amazon-id-123",
       });
     });
   });
