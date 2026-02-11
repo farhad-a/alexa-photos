@@ -62,25 +62,36 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      - name: Create Release Notes
+      - name: Generate Release Notes
         id: release_notes
         run: |
-          cat << EOF > release_notes.md
-          ## Docker Images
+          # Generate AI-powered release notes using GitHub CLI
+          gh release create ${{ steps.version.outputs.TAG_NAME }} \
+            --title "Release ${{ steps.version.outputs.VERSION }}" \
+            --generate-notes \
+            --notes-file generated_notes.md \
+            --draft
 
-          \`\`\`bash
+          # Append custom deployment instructions
+          cat << 'EOF' >> generated_notes.md
+
+          ---
+
+          ## 🐳 Docker Images
+
+          ```bash
           docker pull ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.VERSION }}
-          \`\`\`
+          ```
 
           ### Available tags:
-          - \`${{ steps.version.outputs.VERSION }}\` - This specific version
-          - \`${{ steps.version.outputs.MAJOR }}\` - Latest in v${{ steps.version.outputs.MAJOR }}.x
-          - \`latest\` - Latest stable release
+          - `${{ steps.version.outputs.VERSION }}` - This specific version
+          - `${{ steps.version.outputs.MAJOR }}` - Latest in v${{ steps.version.outputs.MAJOR }}.x
+          - `latest` - Latest stable release
 
-          ### Deployment
+          ### 🚀 Deployment
 
-          Update your \`docker-compose.yml\`:
-          \`\`\`yaml
+          Update your `docker-compose.yml`:
+          ```yaml
           services:
             sync:
               image: ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.VERSION }}
@@ -89,20 +100,21 @@ jobs:
               env_file:
                 - .env
               restart: unless-stopped
-          \`\`\`
+          ```
 
           Then pull and restart:
-          \`\`\`bash
+          ```bash
           docker compose pull
           docker compose up -d
-          \`\`\`
+          ```
+
+          ### 📊 Full Changelog
+          **Full Diff**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.TAG_NAME }}
           EOF
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.TAG_NAME }}
-          name: Release ${{ steps.version.outputs.VERSION }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
+          # Update the draft release with combined notes
+          gh release edit ${{ steps.version.outputs.TAG_NAME }} \
+            --notes-file generated_notes.md \
+            --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
