@@ -88,9 +88,21 @@ export class SyncEngine {
       }
 
       // Process additions
-      for (const photo of toAdd) {
+      for (let i = 0; i < toAdd.length; i++) {
+        const photo = toAdd[i];
         await this.addPhoto(photo);
         photosAdded++;
+
+        // Rate limiting: add delay between uploads if configured
+        if (config.uploadDelayMs > 0 && i < toAdd.length - 1) {
+          logger.debug(
+            { delayMs: config.uploadDelayMs },
+            "Waiting before next upload",
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, config.uploadDelayMs),
+          );
+        }
       }
 
       // Process removals (if enabled)

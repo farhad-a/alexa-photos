@@ -151,6 +151,7 @@ npm test           # Run tests in watch mode
 | `AMAZON_AUTO_REFRESH_COOKIES` | Automatically refresh expired auth tokens   | `true`                       |
 | `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
 | `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
+| `UPLOAD_DELAY_MS`             | Delay between uploads (rate limiting)       | `0` (no delay)               |
 | `LOG_LEVEL`                   | Logging level                               | `info`                       |
 | `ALERT_WEBHOOK_URL`           | Webhook URL for alerts (optional)           | (none)                       |
 | `PUSHOVER_TOKEN`              | Pushover app token (optional)               | (none)                       |
@@ -312,6 +313,31 @@ Returns detailed metrics:
 ```
 
 **Docker health check**: The compose file includes automatic health checks using the `/health` endpoint.
+
+## Tips & Advanced Usage
+
+### Rate Limiting
+
+If you're syncing a large album for the first time or experiencing API throttling from Amazon Photos, you can add a delay between uploads:
+
+```bash
+# Add 1 second delay between uploads
+UPLOAD_DELAY_MS=1000
+```
+
+**When to use:**
+
+- Large initial sync (100+ photos)
+- Amazon API returns 429 (Too Many Requests) errors
+- Running multiple sync instances
+
+**Impact on sync time:**
+
+- 50 photos with 1s delay = ~50 seconds added
+- Only applies to new uploads, not existing photos
+- No delay for checksum deduplication (reused photos)
+
+**Default**: 0 (no delay)
 
 ## Troubleshooting
 

@@ -69,6 +69,7 @@ src/
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
 - **Additions**: check checksum for existing content → if found, reuse Amazon node + add to album → else download from iCloud → upload to Amazon → add to album → save mapping
 - **Checksum dedup**: Queries `StateStore.getMappingByChecksum()` before uploading — avoids re-uploading when photo GUID changes but content is identical
+- **Rate limiting**: Optional delay between uploads via `UPLOAD_DELAY_MS` env var (milliseconds) — prevents overwhelming Amazon API
 - **Removals**: remove from album → trash → purge → delete mapping
 - **Lazy init**: Amazon client created only when there's work to do
 - **Concurrency guard**: `isRunning` flag prevents overlapping runs
@@ -94,6 +95,7 @@ All env vars validated with Zod in `src/lib/config.ts`:
 | `AMAZON_AUTO_REFRESH_COOKIES` | ❌       | `true`                       | Auto-refresh auth cookies on 401              |
 | `SYNC_DELETIONS`              | ❌       | `true`                       | Delete from Amazon when removed from iCloud   |
 | `POLL_INTERVAL_SECONDS`       | ❌       | `60`                         | Polling interval (converted to ms internally) |
+| `UPLOAD_DELAY_MS`             | ❌       | `0`                          | Delay between photo uploads (rate limiting)   |
 | `LOG_LEVEL`                   | ❌       | `info`                       | pino log level                                |
 | `ALERT_WEBHOOK_URL`           | ❌       | —                            | Optional JSON webhook for alerts              |
 | `PUSHOVER_TOKEN`              | ❌       | —                            | Optional Pushover app token                   |
@@ -147,7 +149,7 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [x] **Write tests**: 103 tests passing across 6 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications)
+- [x] **Write tests**: 106 tests passing across 6 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [x] **CI/CD pipeline**: GitHub Actions workflows for automated testing, building, and releases
@@ -157,4 +159,6 @@ npm run build && npm start
 - [x] **Album duplicate prevention**: `addToAlbumIfNotPresent()` checks album contents before adding nodes, preventing duplicates if state.db is lost/deleted
 - [x] **Cookie expiry alerting**: Detect refresh failures and send a notification (webhook, Pushover) to re-authenticate
 - [x] **Checksum dedup**: Uses `icloud_checksum` to avoid re-uploading identical content when photo GUID changes (e.g., re-shared). Reuses existing Amazon node and adds new mapping.
-- [ ] **Rate limiting / throttle**: Add configurable concurrency limit for uploads (currently sequential but no explicit rate limit)
+- [x] **Rate limiting / throttle**: Configurable delay between uploads via `UPLOAD_DELAY_MS` env var. Prevents overwhelming Amazon API with rapid uploads.
+
+**All features complete! 🎉**

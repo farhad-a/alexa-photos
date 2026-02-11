@@ -296,6 +296,65 @@ describe("SyncEngine", () => {
     });
   });
 
+  describe("rate limiting", () => {
+    it("does not delay when uploadDelayMs is 0 (default)", async () => {
+      const photos = [makePhoto("p1"), makePhoto("p2"), makePhoto("p3")];
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue(photos);
+
+      const startTime = Date.now();
+      await engine.run();
+      const elapsed = Date.now() - startTime;
+
+      // Should complete quickly (no artificial delays)
+      expect(elapsed).toBeLessThan(100);
+      expect(mockMappings.size).toBe(3);
+    });
+
+    it("applies delay between uploads when configured", async () => {
+      // Override config to add 100ms delay
+      const configModule = await import("../lib/config.js");
+      const originalDelay = configModule.config.uploadDelayMs;
+      (configModule.config as any).uploadDelayMs = 100;
+
+      try {
+        const photos = [makePhoto("p1"), makePhoto("p2"), makePhoto("p3")];
+        vi.spyOn(icloud, "getPhotos").mockResolvedValue(photos);
+
+        const startTime = Date.now();
+        await engine.run();
+        const elapsed = Date.now() - startTime;
+
+        // Should have 2 delays (100ms * 2 = 200ms minimum)
+        // Between p1→p2 and p2→p3, but NOT after p3
+        expect(elapsed).toBeGreaterThanOrEqual(200);
+        expect(mockMappings.size).toBe(3);
+      } finally {
+        (configModule.config as any).uploadDelayMs = originalDelay;
+      }
+    });
+
+    it("does not delay after the last photo", async () => {
+      const configModule = await import("../lib/config.js");
+      const originalDelay = configModule.config.uploadDelayMs;
+      (configModule.config as any).uploadDelayMs = 100;
+
+      try {
+        const photo = makePhoto("p1");
+        vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+        const startTime = Date.now();
+        await engine.run();
+        const elapsed = Date.now() - startTime;
+
+        // Single photo should have no delay
+        expect(elapsed).toBeLessThan(100);
+        expect(mockMappings.size).toBe(1);
+      } finally {
+        (configModule.config as any).uploadDelayMs = originalDelay;
+      }
+    });
+  });
+
   describe("removals", () => {
     it("removes photos that are no longer in iCloud", async () => {
       // Photo was synced but is no longer in iCloud
