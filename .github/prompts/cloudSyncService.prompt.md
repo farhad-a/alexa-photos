@@ -127,6 +127,7 @@ npm run build && npm start
 - **docker-compose.yml**: Mounts `./data` volume, reads `.env`, restarts unless stopped
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service attempts auto-refresh using `sess-at-main`/`sst-main`. If refresh fails, it can alert via webhook/Pushover and you'll need to re-run `npm run amazon:setup`.
+- **Notification throttling**: Duplicate alerts are throttled to 1 per hour to prevent spam. Throttle auto-clears on successful cookie refresh.
 
 ## Key Design Decisions
 
@@ -146,7 +147,7 @@ npm run build && npm start
 
 ## TODOs / Next Steps
 
-- [x] **Write tests**: 93 tests passing across 5 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers)
+- [x] **Write tests**: 103 tests passing across 6 test files (ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications)
 - [x] **Retry on download failures**: iCloud downloads now retry with exponential backoff (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`)
 - [x] **Optional deletion sync**: Set `SYNC_DELETIONS=false` for append-only mode
 - [x] **CI/CD pipeline**: GitHub Actions workflows for automated testing, building, and releases

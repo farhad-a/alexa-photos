@@ -1,6 +1,7 @@
 import { logger } from "../lib/logger.js";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
+import { NotificationService } from "../lib/notifications.js";
 
 export interface NotificationCallback {
   (message: string, level: "error" | "warning" | "info"): Promise<void>;
@@ -51,6 +52,7 @@ export class AmazonClient {
   private cookiesPath: string;
   private autoRefresh: boolean;
   private notificationCallback?: NotificationCallback;
+  private notificationService?: NotificationService;
 
   constructor(
     cookies: AmazonCookies,
@@ -58,6 +60,7 @@ export class AmazonClient {
       cookiesPath?: string;
       autoRefresh?: boolean;
       notificationCallback?: NotificationCallback;
+      notificationService?: NotificationService;
     } = {},
   ) {
     this.cookies = cookies;
@@ -68,6 +71,7 @@ export class AmazonClient {
     this.cookiesPath = options.cookiesPath || COOKIES_PATH;
     this.autoRefresh = options.autoRefresh ?? true;
     this.notificationCallback = options.notificationCallback;
+    this.notificationService = options.notificationService;
     this.baseParams = {
       asset: "ALL",
       tempLink: "false",
@@ -95,6 +99,7 @@ export class AmazonClient {
     cookiePath = COOKIES_PATH,
     autoRefresh = true,
     notificationCallback?: NotificationCallback,
+    notificationService?: NotificationService,
   ): Promise<AmazonClient> {
     const raw = await fs.readFile(cookiePath, "utf-8");
     const cookies = JSON.parse(raw) as AmazonCookies;
@@ -102,6 +107,7 @@ export class AmazonClient {
       cookiesPath: cookiePath,
       autoRefresh,
       notificationCallback,
+      notificationService,
     });
   }
 
@@ -279,6 +285,13 @@ export class AmazonClient {
             );
 
             logger.info("Successfully refreshed at-main token");
+
+            // Clear notification throttle so future failures trigger new alerts
+            this.notificationService?.clearAlertThrottle(
+              "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+              "error",
+            );
+
             return true;
           }
         }

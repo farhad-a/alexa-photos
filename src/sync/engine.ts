@@ -143,6 +143,7 @@ export class SyncEngine {
         config.amazonCookiesPath,
         config.amazonAutoRefreshCookies,
         (message, level) => this.notifications.sendAlert(message, level),
+        this.notifications,
       );
 
       // Verify auth on first use

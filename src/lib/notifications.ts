@@ -16,9 +16,50 @@ export interface AlertPayload {
 
 export class NotificationService {
   private config: NotificationConfig;
+  private sentAlerts: Map<string, number> = new Map();
+  private throttleMs: number;
 
-  constructor(config: NotificationConfig) {
+  constructor(config: NotificationConfig, throttleMs = 3600000) {
     this.config = config;
+    this.throttleMs = throttleMs; // Default: 1 hour
+  }
+
+  /**
+   * Get a unique key for an alert to track duplicates
+   */
+  private getAlertKey(message: string, level: string): string {
+    return `${level}:${message}`;
+  }
+
+  /**
+   * Check if we should send this alert based on throttling rules
+   */
+  private shouldSendAlert(message: string, level: string): boolean {
+    const key = this.getAlertKey(message, level);
+    const lastSent = this.sentAlerts.get(key);
+
+    if (!lastSent) {
+      return true; // Never sent before
+    }
+
+    const timeSinceLastSent = Date.now() - lastSent;
+    return timeSinceLastSent >= this.throttleMs;
+  }
+
+  /**
+   * Mark an alert as sent
+   */
+  private markAlertSent(message: string, level: string): void {
+    const key = this.getAlertKey(message, level);
+    this.sentAlerts.set(key, Date.now());
+  }
+
+  /**
+   * Clear throttle state for a specific alert (useful when error is resolved)
+   */
+  clearAlertThrottle(message: string, level: string): void {
+    const key = this.getAlertKey(message, level);
+    this.sentAlerts.delete(key);
   }
 
   async sendAlert(
@@ -26,6 +67,15 @@ export class NotificationService {
     level: "error" | "warning" | "info" = "error",
     details?: Record<string, unknown>,
   ): Promise<void> {
+    // Check if we should throttle this alert
+    if (!this.shouldSendAlert(message, level)) {
+      logger.debug(
+        { message, level },
+        "Alert throttled (already sent recently)",
+      );
+      return;
+    }
+
     const payload: AlertPayload = {
       service: "alexa-photos",
       level,
@@ -53,6 +103,9 @@ export class NotificationService {
 
     // Send all notifications in parallel
     await Promise.allSettled(promises);
+
+    // Mark as sent after successful send
+    this.markAlertSent(message, level);
   }
 
   private async sendWebhook(payload: AlertPayload): Promise<void> {

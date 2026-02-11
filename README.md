@@ -167,6 +167,8 @@ The service can send alerts when critical errors occur, such as when cookie refr
 
 You can configure one, both, or neither. When both are configured, alerts are sent to all channels in parallel.
 
+> **📢 Throttling:** Duplicate alerts are automatically throttled to prevent spam — the same error message will only be sent once per hour. The throttle automatically clears when the issue is resolved (e.g., after successful cookie refresh).
+
 ---
 
 ### Option 1: Generic Webhook (Flexible)

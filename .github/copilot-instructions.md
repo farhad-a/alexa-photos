@@ -27,6 +27,7 @@ src/
   - `ALERT_WEBHOOK_URL` (generic JSON webhook)
   - `PUSHOVER_TOKEN` / `PUSHOVER_USER` (native Pushover)
 - Implementation lives in `src/lib/notifications.ts` (`NotificationService`)
+- **Throttling**: Duplicate alerts throttled to 1 per hour — prevents notification spam on repeated errors
 - Cookie refresh failures trigger alerts via a callback wired from `SyncEngine` → `AmazonClient`
 
 ### Platform Clients
