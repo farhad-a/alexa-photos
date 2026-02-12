@@ -13,6 +13,7 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
+    "ci": "npm run build && npm run format:check && npm run lint && npm run test:run",
     "icloud:test": "tsx src/icloud/test.ts",
     "amazon:setup": "tsx src/amazon/login.ts",
     "notifications:test": "NODE_OPTIONS='--import tsx' node --env-file=.env src/lib/test-notifications.ts",
