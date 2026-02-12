@@ -1,7 +1,7 @@
 # Multi-stage build for alexa-photos sync service
 
 # Stage 1: Build TypeScript
-FROM node:20-slim AS builder
+FROM node:25-slim AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY tsconfig.json ./
 RUN npm run build
 
 # Stage 2: Runtime
-FROM node:20-slim
+FROM node:25-slim
 
 # Install curl for healthcheck
 RUN apt-get update && \
