@@ -54,7 +54,10 @@ async function main() {
         ...metrics,
       });
     }
-    logger.info({ nextSyncInSeconds: pollIntervalSeconds }, "Next sync scheduled");
+    logger.info(
+      { nextSyncInSeconds: pollIntervalSeconds },
+      "Next sync scheduled",
+    );
   };
 
   // Initial sync

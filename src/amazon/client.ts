@@ -106,7 +106,10 @@ export class AmazonClient {
     logger.debug({ path: cookiePath }, "Loading cookies from file");
     const raw = await fs.readFile(cookiePath, "utf-8");
     const cookies = JSON.parse(raw) as AmazonCookies;
-    logger.debug({ path: cookiePath, cookieCount: Object.keys(cookies).length }, "Cookies loaded");
+    logger.debug(
+      { path: cookiePath, cookieCount: Object.keys(cookies).length },
+      "Cookies loaded",
+    );
     return new AmazonClient(cookies, {
       cookiesPath: cookiePath,
       autoRefresh,

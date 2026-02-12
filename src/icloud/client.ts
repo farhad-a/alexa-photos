@@ -37,10 +37,15 @@ export class ICloudClient {
         this.baseUrl = `https://${host}/${this.albumToken}/sharedstreams`;
         logger.debug({ host }, "Discovered iCloud partition");
       } else {
-        logger.warn("Partition discovery returned 330 but no X-Apple-MMe-Host header");
+        logger.warn(
+          "Partition discovery returned 330 but no X-Apple-MMe-Host header",
+        );
       }
     } else if (!res.ok && res.status !== 200) {
-      logger.warn({ status: res.status }, "Unexpected partition discovery response, using default partition");
+      logger.warn(
+        { status: res.status },
+        "Unexpected partition discovery response, using default partition",
+      );
     }
   }
 
@@ -135,7 +140,10 @@ export class ICloudClient {
     const valid = photos.filter((p) => p.url);
     const skipped = photos.length - valid.length;
     if (skipped > 0) {
-      logger.warn({ skipped, total: photos.length }, "Photos missing download URLs, skipped");
+      logger.warn(
+        { skipped, total: photos.length },
+        "Photos missing download URLs, skipped",
+      );
     }
     logger.info({ count: valid.length }, "Fetched photos from iCloud");
     return valid;
