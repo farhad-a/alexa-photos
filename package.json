@@ -1,6 +1,6 @@
 {
   "name": "alexa-photos",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Sync iCloud shared album to Amazon Photos for Echo Show display",
   "type": "module",
   "scripts": {
