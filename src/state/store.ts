@@ -1,5 +1,7 @@
 import Database from "better-sqlite3";
-import { logger } from "../lib/logger.js";
+import { logger as rootLogger } from "../lib/logger.js";
+
+const logger = rootLogger.child({ component: "state" });
 
 const DB_PATH = "./data/state.db";
 

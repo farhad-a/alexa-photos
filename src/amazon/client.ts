@@ -1,4 +1,6 @@
-import { logger } from "../lib/logger.js";
+import { logger as rootLogger } from "../lib/logger.js";
+
+const logger = rootLogger.child({ component: "amazon" });
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import { NotificationService } from "../lib/notifications.js";
@@ -101,8 +103,10 @@ export class AmazonClient {
     notificationCallback?: NotificationCallback,
     notificationService?: NotificationService,
   ): Promise<AmazonClient> {
+    logger.debug({ path: cookiePath }, "Loading cookies from file");
     const raw = await fs.readFile(cookiePath, "utf-8");
     const cookies = JSON.parse(raw) as AmazonCookies;
+    logger.debug({ path: cookiePath, cookieCount: Object.keys(cookies).length }, "Cookies loaded");
     return new AmazonClient(cookies, {
       cookiesPath: cookiePath,
       autoRefresh,
@@ -322,7 +326,8 @@ export class AmazonClient {
         );
       }
       return false;
-    } catch {
+    } catch (error) {
+      logger.warn({ error }, "Auth check failed (network error)");
       return false;
     }
   }

@@ -1,5 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
-import { logger } from "./logger.js";
+import { logger as rootLogger } from "./logger.js";
+
+const logger = rootLogger.child({ component: "health" });
 
 export interface HealthMetrics {
   status: "healthy" | "unhealthy" | "starting";

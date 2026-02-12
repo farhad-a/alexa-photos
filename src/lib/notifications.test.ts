@@ -6,13 +6,18 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 // Mock logger
-vi.mock("./logger.js", () => ({
-  logger: {
+const mockLogger = vi.hoisted(() => {
+  const m = {
     debug: vi.fn(),
+    info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  },
-}));
+    child: vi.fn(),
+  };
+  m.child.mockReturnValue(m);
+  return m;
+});
+vi.mock("./logger.js", () => ({ logger: mockLogger }));
 
 describe("NotificationService", () => {
   beforeEach(() => {

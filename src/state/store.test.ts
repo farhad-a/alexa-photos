@@ -3,14 +3,18 @@ import Database from "better-sqlite3";
 import { StateStore, PhotoMapping } from "./store.js";
 
 // Mock the logger
-vi.mock("../lib/logger.js", () => ({
-  logger: {
+const mockLogger = vi.hoisted(() => {
+  const m = {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  },
-}));
+    child: vi.fn(),
+  };
+  m.child.mockReturnValue(m);
+  return m;
+});
+vi.mock("../lib/logger.js", () => ({ logger: mockLogger }));
 
 // Override DB_PATH to use in-memory database
 vi.mock("better-sqlite3", async (importOriginal) => {

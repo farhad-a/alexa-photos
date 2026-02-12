@@ -1,4 +1,6 @@
-import { logger } from "./logger.js";
+import { logger as rootLogger } from "./logger.js";
+
+const logger = rootLogger.child({ component: "notifications" });
 
 export interface NotificationConfig {
   webhookUrl?: string;

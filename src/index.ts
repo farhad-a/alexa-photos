@@ -1,5 +1,7 @@
 import "dotenv/config";
-import { logger } from "./lib/logger.js";
+import { logger as rootLogger } from "./lib/logger.js";
+
+const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
 import { SyncEngine } from "./sync/engine.js";
@@ -36,6 +38,7 @@ async function main() {
   process.on("SIGTERM", shutdown);
 
   // Run sync and update health metrics
+  const pollIntervalSeconds = config.pollIntervalMs / 1000;
   const runSyncWithMetrics = async () => {
     try {
       await sync.run();
@@ -44,14 +47,14 @@ async function main() {
         status: "healthy",
         ...metrics,
       });
-    } catch (error) {
-      logger.error({ error }, "Sync failed");
+    } catch {
       const metrics = sync.getMetrics();
       health.updateMetrics({
         status: "unhealthy",
         ...metrics,
       });
     }
+    logger.info({ nextSyncInSeconds: pollIntervalSeconds }, "Next sync scheduled");
   };
 
   // Initial sync
