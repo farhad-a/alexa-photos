@@ -598,7 +598,6 @@ export class AmazonClient {
     let offset = 0;
     const limit = 200;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const res = await this.listChildren(albumId, "", limit, offset);
       if (!res.data?.length) break;

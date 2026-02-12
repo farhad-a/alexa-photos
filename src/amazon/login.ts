@@ -12,7 +12,7 @@
 import "dotenv/config";
 import * as fs from "fs/promises";
 import * as readline from "readline/promises";
-import { AmazonClient } from "./client.js";
+import { AmazonClient, AmazonCookies } from "./client.js";
 
 const COOKIES_PATH = "./data/amazon-cookies.json";
 
@@ -73,7 +73,10 @@ export function extractRequiredCookies(
   for (const key of needed) {
     if (all[key]) {
       cookies[key] = all[key];
-    } else if (US_REQUIRED.includes(key as any) || !tld.startsWith("com")) {
+    } else if (
+      US_REQUIRED.includes(key as (typeof US_REQUIRED)[number]) ||
+      !tld.startsWith("com")
+    ) {
       // Only flag truly required keys as missing
       missing.push(key);
     }
@@ -210,7 +213,7 @@ async function main() {
 
     // Verify
     console.log("\nVerifying authentication...");
-    const client = new AmazonClient(cookies as any);
+    const client = new AmazonClient(cookies as AmazonCookies);
     const ok = await client.checkAuth();
 
     if (ok) {

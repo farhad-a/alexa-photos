@@ -56,7 +56,8 @@ export class ICloudClient {
     }
 
     const webstream = await webstreamRes.json();
-    const photoGuids = webstream.photos?.map((p: any) => p.photoGuid) || [];
+    const photoGuids =
+      webstream.photos?.map((p: { photoGuid: string }) => p.photoGuid) || [];
 
     if (photoGuids.length === 0) {
       logger.info("No photos found in album");
@@ -78,33 +79,52 @@ export class ICloudClient {
     const items = assetsData.items || {};
 
     // Map photos with their download URLs
-    const photos: ICloudPhoto[] = webstream.photos.map((photo: any) => {
-      // Find the best quality derivative by total resolution (width × height)
-      const derivatives = Object.entries(photo.derivatives || {});
-      const best = derivatives.reduce(
-        (prev: any, [key, val]: [string, any]) => {
-          const currentResolution = val.width * val.height;
-          const prevResolution = prev ? prev[1].width * prev[1].height : 0;
-          if (currentResolution > prevResolution) return [key, val];
-          return prev;
-        },
-        null,
-      );
+    interface ICloudDerivative {
+      width: number;
+      height: number;
+      checksum: string;
+    }
 
-      const [, derivative] = best || [null, null];
-      const assetUrl = items[derivative?.checksum]?.url_location;
-      const urlPath = items[derivative?.checksum]?.url_path;
+    interface ICloudApiPhoto {
+      photoGuid: string;
+      caption?: string;
+      dateCreated: string | number;
+      derivatives?: Record<string, ICloudDerivative>;
+    }
 
-      return {
-        id: photo.photoGuid,
-        checksum: derivative?.checksum || "",
-        url: assetUrl && urlPath ? `https://${assetUrl}${urlPath}` : "",
-        width: derivative?.width || 0,
-        height: derivative?.height || 0,
-        caption: photo.caption,
-        dateCreated: this.parseAppleDate(photo.dateCreated),
-      };
-    });
+    const photos: ICloudPhoto[] = webstream.photos.map(
+      (photo: ICloudApiPhoto) => {
+        // Find the best quality derivative by total resolution (width × height)
+        const derivatives = Object.entries(photo.derivatives || {});
+        const best = derivatives.reduce(
+          (
+            prev: [string, ICloudDerivative] | null,
+            [key, val]: [string, ICloudDerivative],
+          ) => {
+            const currentResolution = val.width * val.height;
+            const prevResolution = prev ? prev[1].width * prev[1].height : 0;
+            if (currentResolution > prevResolution) return [key, val];
+            return prev;
+          },
+          null,
+        );
+
+        const [, derivative] = best || [null, null];
+        const checksum = derivative?.checksum;
+        const assetUrl = checksum ? items[checksum]?.url_location : undefined;
+        const urlPath = checksum ? items[checksum]?.url_path : undefined;
+
+        return {
+          id: photo.photoGuid,
+          checksum: derivative?.checksum || "",
+          url: assetUrl && urlPath ? `https://${assetUrl}${urlPath}` : "",
+          width: derivative?.width || 0,
+          height: derivative?.height || 0,
+          caption: photo.caption,
+          dateCreated: this.parseAppleDate(photo.dateCreated),
+        };
+      },
+    );
 
     logger.info({ count: photos.length }, "Fetched photos from iCloud");
     return photos.filter((p) => p.url); // Only return photos with valid URLs

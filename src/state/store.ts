@@ -10,6 +10,13 @@ export interface PhotoMapping {
   syncedAt: Date;
 }
 
+interface PhotoMappingRow {
+  icloud_id: string;
+  icloud_checksum: string;
+  amazon_id: string;
+  synced_at: string;
+}
+
 export class StateStore {
   private db: Database.Database;
 
@@ -37,7 +44,7 @@ export class StateStore {
   getMapping(icloudId: string): PhotoMapping | null {
     const row = this.db
       .prepare("SELECT * FROM photo_mappings WHERE icloud_id = ?")
-      .get(icloudId) as any;
+      .get(icloudId) as PhotoMappingRow | undefined;
 
     if (!row) return null;
 
@@ -52,7 +59,7 @@ export class StateStore {
   getMappingByChecksum(checksum: string): PhotoMapping | null {
     const row = this.db
       .prepare("SELECT * FROM photo_mappings WHERE icloud_checksum = ?")
-      .get(checksum) as any;
+      .get(checksum) as PhotoMappingRow | undefined;
 
     if (!row) return null;
 
@@ -65,7 +72,9 @@ export class StateStore {
   }
 
   getAllMappings(): PhotoMapping[] {
-    const rows = this.db.prepare("SELECT * FROM photo_mappings").all() as any[];
+    const rows = this.db
+      .prepare("SELECT * FROM photo_mappings")
+      .all() as PhotoMappingRow[];
 
     return rows.map((row) => ({
       icloudId: row.icloud_id,
