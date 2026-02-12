@@ -26,6 +26,9 @@ src/
 ### Logging
 - Use **pino** structured logging throughout
 - Always include context objects: `logger.info({ photoId, amazonId }, "message")`
+- **Child loggers**: Each module creates `rootLogger.child({ component: "..." })` — filter by component in production
+- **Error serializer**: Custom `serializers: { error: pino.stdSerializers.err }` ensures `{ error }` objects serialize stack/message/code (not `{}`)
+- **Test mocks**: Logger mocks must include `child()` — use `vi.hoisted()` to hoist the mock above `vi.mock()` factory
 
 ### Notifications
 - Optional alerting via `ALERT_WEBHOOK_URL` or `PUSHOVER_TOKEN`/`PUSHOVER_USER`
@@ -60,6 +63,8 @@ src/
 - **Rate limiting**: Optional `UPLOAD_DELAY_MS` adds delay between uploads
 - **Lazy initialization**: Amazon client created only when sync work exists
 - **Concurrency guard**: `isRunning` flag prevents overlapping runs
+- **Error handling**: Per-photo errors are caught in the run loop (not inside `addPhoto`) so `photosAdded`/`photosFailed` counts are accurate
+- **Sync summary**: "Sync complete" log includes `{ durationMs, photosAdded, photosFailed, photosRemoved }`
 
 ### StateStore ([src/state/store.ts](src/state/store.ts))
 - **SQLite** via `better-sqlite3`
@@ -84,11 +89,14 @@ npm run notifications:test
 
 # Run tests
 npm test
+
+# Run full CI checks locally (build + format + lint + test)
+npm run ci
 ```
 
 ## Deployment
 
-- **Docker**: `node:20-slim` base image (no browser dependencies needed)
+- **Docker**: `node:25-slim` base image (no browser dependencies needed)
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`. If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
@@ -101,6 +109,13 @@ npm test
 - **Search vs nodes**: The `/search` endpoint does NOT support `kind:` filter (returns 400). Use `/nodes` for album queries
 - **Cookie key format**: Browser DevTools shows hyphens (`at-main`), some libraries use underscores (`at_main`). TLD detection handles both
 - **Date parsing**: iCloud API returns ISO strings for some photos, Apple epoch timestamps for others. Client handles both
+
+## Code Quality
+
+- **ESLint**: `@typescript-eslint/no-explicit-any` is set to `warn` — use proper types (interfaces for API responses, SQLite rows, etc.) instead of `any`
+- **Prettier**: Formatting enforced via `npm run format:check` in CI
+- **CI**: GitHub Actions runs on Node 20 + 25 — replicate locally with `npm run ci`
+- Run `npm run ci` before pushing to catch issues early
 
 ## Testing
 
