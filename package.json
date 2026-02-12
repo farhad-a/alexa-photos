@@ -23,7 +23,7 @@
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.2.4",
     "pino": "^8.17.0",
-    "zod": "^3.22.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
