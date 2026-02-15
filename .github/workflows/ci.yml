@@ -7,6 +7,10 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: none
+
 jobs:
   test:
     name: Test (Node ${{ matrix.node-version }})
