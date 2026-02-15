@@ -299,6 +299,11 @@ export class AmazonClient {
               "error",
             );
 
+            await this.notificationCallback?.(
+              "Amazon Photos cookies refreshed successfully",
+              "info",
+            );
+
             return true;
           }
         }

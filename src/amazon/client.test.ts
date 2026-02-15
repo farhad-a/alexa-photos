@@ -480,6 +480,47 @@ describe("AmazonClient", () => {
       // Should have been called 3 times: original + refresh + retry
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
+
+    it("sends recovery notification after successful token refresh", async () => {
+      // First call: 401 error
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "Unauthorized",
+      });
+
+      // Second call: successful refresh
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: {
+            tokens: {
+              cookies: [{ Name: "at-main", Value: "Atza|new-token" }],
+            },
+          },
+        }),
+      });
+
+      // Third call: retry original request with new token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      const notificationCallback = vi.fn();
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+        notificationCallback,
+      });
+
+      await client["request"]("GET", "https://www.amazon.com/drive/v1/nodes");
+
+      expect(notificationCallback).toHaveBeenCalledWith(
+        "Amazon Photos cookies refreshed successfully",
+        "info",
+      );
+    });
   });
 
   describe("addToAlbumIfNotPresent", () => {
