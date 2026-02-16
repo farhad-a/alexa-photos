@@ -34,9 +34,9 @@ export class SyncEngine {
     amazonAuthenticated: false,
   };
 
-  constructor(icloud: ICloudClient) {
+  constructor(icloud: ICloudClient, state: StateStore) {
     this.icloud = icloud;
-    this.state = new StateStore();
+    this.state = state;
     this.notifications = new NotificationService(config);
   }
 
@@ -272,6 +272,5 @@ export class SyncEngine {
     if (this.amazon) {
       await this.amazon.close();
     }
-    this.state.close();
   }
 }

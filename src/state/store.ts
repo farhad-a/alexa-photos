@@ -119,6 +119,87 @@ export class StateStore {
     logger.debug({ amazonId }, "Removed photo mapping by Amazon ID");
   }
 
+  getCount(search?: string): number {
+    if (search) {
+      const like = `%${search}%`;
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) as count FROM photo_mappings
+           WHERE icloud_id LIKE ? OR icloud_checksum LIKE ? OR amazon_id LIKE ?`,
+        )
+        .get(like, like, like) as { count: number };
+      return row.count;
+    }
+    const row = this.db
+      .prepare("SELECT COUNT(*) as count FROM photo_mappings")
+      .get() as { count: number };
+    return row.count;
+  }
+
+  getMappingsPaginated(options: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    sortBy?: "synced_at" | "icloud_id";
+    sortOrder?: "asc" | "desc";
+  }): PhotoMapping[] {
+    const {
+      page,
+      pageSize,
+      search,
+      sortBy = "synced_at",
+      sortOrder = "desc",
+    } = options;
+    const offset = (page - 1) * pageSize;
+
+    // Whitelist sort column to prevent SQL injection
+    const column = sortBy === "icloud_id" ? "icloud_id" : "synced_at";
+    const order = sortOrder === "asc" ? "ASC" : "DESC";
+
+    let rows: PhotoMappingRow[];
+    if (search) {
+      const like = `%${search}%`;
+      rows = this.db
+        .prepare(
+          `SELECT * FROM photo_mappings
+           WHERE icloud_id LIKE ? OR icloud_checksum LIKE ? OR amazon_id LIKE ?
+           ORDER BY ${column} ${order}
+           LIMIT ? OFFSET ?`,
+        )
+        .all(like, like, like, pageSize, offset) as PhotoMappingRow[];
+    } else {
+      rows = this.db
+        .prepare(
+          `SELECT * FROM photo_mappings
+           ORDER BY ${column} ${order}
+           LIMIT ? OFFSET ?`,
+        )
+        .all(pageSize, offset) as PhotoMappingRow[];
+    }
+
+    return rows.map((row) => ({
+      icloudId: row.icloud_id,
+      icloudChecksum: row.icloud_checksum,
+      amazonId: row.amazon_id,
+      syncedAt: new Date(row.synced_at),
+    }));
+  }
+
+  removeMappings(icloudIds: string[]): number {
+    const stmt = this.db.prepare(
+      "DELETE FROM photo_mappings WHERE icloud_id = ?",
+    );
+    const transaction = this.db.transaction((ids: string[]) => {
+      let count = 0;
+      for (const id of ids) {
+        const result = stmt.run(id);
+        count += result.changes;
+      }
+      return count;
+    });
+    return transaction(icloudIds);
+  }
+
   close(): void {
     this.db.close();
   }

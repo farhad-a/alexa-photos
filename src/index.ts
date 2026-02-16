@@ -5,6 +5,7 @@ const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
 import { SyncEngine } from "./sync/engine.js";
+import { StateStore } from "./state/store.js";
 import { HealthServer } from "./lib/health.js";
 
 async function main() {
@@ -18,10 +19,11 @@ async function main() {
   );
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
-  const sync = new SyncEngine(icloud);
+  const state = new StateStore();
+  const sync = new SyncEngine(icloud, state);
 
   // Start health server
-  const health = new HealthServer(config.healthPort);
+  const health = new HealthServer(config.healthPort, state);
   await health.start();
 
   // Update health status to healthy initially
@@ -32,6 +34,7 @@ async function main() {
     logger.info("Shutting down...");
     await health.stop();
     await sync.close();
+    state.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ICloudClient, ICloudPhoto } from "../icloud/client.js";
 import { AmazonClient } from "../amazon/client.js";
+import { StateStore } from "../state/store.js";
 import { SyncEngine } from "./engine.js";
 
 // Mock fetch globally
@@ -131,7 +132,7 @@ describe("SyncEngine", () => {
       Buffer.from("fake-jpg-data"),
     );
 
-    engine = new SyncEngine(icloud);
+    engine = new SyncEngine(icloud, new StateStore());
   });
 
   describe("no-op sync", () => {

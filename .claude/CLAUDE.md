@@ -13,7 +13,12 @@ src/
 ├── amazon/client.ts      # Amazon Photos REST API (cookie-based auth)
 ├── sync/engine.ts        # Orchestrates diff detection and sync operations
 ├── state/store.ts        # SQLite mappings: icloud_id ↔ amazon_id
-└── lib/                  # Config (Zod), logging (pino), notifications
+└── lib/
+    ├── config.ts         # Zod-validated env config
+    ├── logger.ts         # Pino structured logging
+    ├── notifications.ts  # Webhook/Pushover alerting
+    ├── health.ts         # HTTP server: health, metrics, and mappings API
+    └── ui.ts             # Admin UI (inline HTML/CSS/JS served from health server)
 ```
 
 ## Key Patterns & Conventions
@@ -55,6 +60,7 @@ src/
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
 ### SyncEngine ([src/sync/engine.ts](src/sync/engine.ts))
+- **Dependency injection**: Accepts `StateStore` via constructor — shared with `HealthServer` for the admin UI
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
 - **Additions**: Check checksum for existing content → if found, reuse Amazon node + add to album → else download → upload → add to album → save mapping
 - **Checksum dedup**: Queries `StateStore.getMappingByChecksum()` before uploading — avoids re-uploading when photo GUID changes but content is identical
@@ -65,12 +71,14 @@ src/
 - **Concurrency guard**: `isRunning` flag prevents overlapping runs
 - **Error handling**: Per-photo errors are caught in the run loop (not inside `addPhoto`) so `photosAdded`/`photosFailed` counts are accurate
 - **Sync summary**: "Sync complete" log includes `{ durationMs, photosAdded, photosFailed, photosRemoved }`
+- **No resync on external delete**: If a photo is deleted from Amazon Photos directly, the mapping still exists — the engine skips it. Delete the mapping via the admin UI to force a resync
 
 ### StateStore ([src/state/store.ts](src/state/store.ts))
 - **SQLite** via `better-sqlite3`
+- **Shared singleton**: Created in `index.ts`, injected into both `SyncEngine` and `HealthServer`
 - **Table**: `photo_mappings` (icloud_id PK, icloud_checksum, amazon_id, synced_at)
 - **Indexes**: `amazon_id`, `icloud_checksum`
-- **Key methods**: `getMappingByChecksum()` for deduplication
+- **Key methods**: `getMappingByChecksum()` for deduplication, `getMappingsPaginated()` for UI, `removeMappings()` for bulk delete
 
 ## Development Workflow
 
@@ -100,6 +108,7 @@ npm run ci
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`. If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
+- **Admin UI**: `http://localhost:3000/` — web UI for managing photo mappings (search, paginate, delete to force resync)
 
 ## Important Notes & Gotchas
 
@@ -119,8 +128,8 @@ npm run ci
 
 ## Testing
 
-- **106 tests** across 6 test files
-- Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications
+- **141 tests** across 7 test files
+- Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications, health/API endpoints
 - Run with `npm test`
 
 ## Design Decisions

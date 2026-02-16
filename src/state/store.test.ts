@@ -181,6 +181,192 @@ describe("StateStore", () => {
     });
   });
 
+  describe("getCount", () => {
+    it("returns 0 when empty", () => {
+      expect(store.getCount()).toBe(0);
+    });
+
+    it("returns total count", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "a",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "ic-2",
+        icloudChecksum: "b",
+        amazonId: "az-2",
+      });
+      expect(store.getCount()).toBe(2);
+    });
+
+    it("returns filtered count matching icloud_id", () => {
+      store.addMapping({
+        icloudId: "photo-abc",
+        icloudChecksum: "x",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "photo-def",
+        icloudChecksum: "y",
+        amazonId: "az-2",
+      });
+      expect(store.getCount("abc")).toBe(1);
+    });
+
+    it("returns filtered count matching checksum", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "unique-hash",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "ic-2",
+        icloudChecksum: "other",
+        amazonId: "az-2",
+      });
+      expect(store.getCount("unique")).toBe(1);
+    });
+
+    it("returns filtered count matching amazon_id", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "a",
+        amazonId: "node-xyz",
+      });
+      expect(store.getCount("xyz")).toBe(1);
+    });
+
+    it("returns 0 when search matches nothing", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "a",
+        amazonId: "az-1",
+      });
+      expect(store.getCount("nonexistent")).toBe(0);
+    });
+  });
+
+  describe("getMappingsPaginated", () => {
+    function addMappings(count: number) {
+      for (let i = 1; i <= count; i++) {
+        store.addMapping({
+          icloudId: `ic-${String(i).padStart(3, "0")}`,
+          icloudChecksum: `chk-${i}`,
+          amazonId: `az-${i}`,
+        });
+      }
+    }
+
+    it("returns first page of results", () => {
+      addMappings(5);
+      const results = store.getMappingsPaginated({ page: 1, pageSize: 3 });
+      expect(results).toHaveLength(3);
+    });
+
+    it("returns second page with remaining results", () => {
+      addMappings(5);
+      const results = store.getMappingsPaginated({ page: 2, pageSize: 3 });
+      expect(results).toHaveLength(2);
+    });
+
+    it("returns empty array for page beyond data", () => {
+      addMappings(3);
+      const results = store.getMappingsPaginated({ page: 10, pageSize: 50 });
+      expect(results).toEqual([]);
+    });
+
+    it("filters by search term", () => {
+      store.addMapping({
+        icloudId: "photo-abc",
+        icloudChecksum: "x",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "photo-def",
+        icloudChecksum: "y",
+        amazonId: "az-2",
+      });
+      const results = store.getMappingsPaginated({
+        page: 1,
+        pageSize: 50,
+        search: "abc",
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0].icloudId).toBe("photo-abc");
+    });
+
+    it("sorts by icloud_id ascending", () => {
+      store.addMapping({
+        icloudId: "bb",
+        icloudChecksum: "x",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "aa",
+        icloudChecksum: "y",
+        amazonId: "az-2",
+      });
+      const results = store.getMappingsPaginated({
+        page: 1,
+        pageSize: 50,
+        sortBy: "icloud_id",
+        sortOrder: "asc",
+      });
+      expect(results[0].icloudId).toBe("aa");
+      expect(results[1].icloudId).toBe("bb");
+    });
+
+    it("returns empty array when table is empty", () => {
+      const results = store.getMappingsPaginated({ page: 1, pageSize: 50 });
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe("removeMappings", () => {
+    it("deletes multiple mappings in one call", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "a",
+        amazonId: "az-1",
+      });
+      store.addMapping({
+        icloudId: "ic-2",
+        icloudChecksum: "b",
+        amazonId: "az-2",
+      });
+      store.addMapping({
+        icloudId: "ic-3",
+        icloudChecksum: "c",
+        amazonId: "az-3",
+      });
+
+      const deleted = store.removeMappings(["ic-1", "ic-2"]);
+      expect(deleted).toBe(2);
+      expect(store.getMapping("ic-1")).toBeNull();
+      expect(store.getMapping("ic-2")).toBeNull();
+      expect(store.getMapping("ic-3")).not.toBeNull();
+    });
+
+    it("returns 0 for non-existent IDs", () => {
+      expect(store.removeMappings(["no-such-id"])).toBe(0);
+    });
+
+    it("handles empty array", () => {
+      expect(store.removeMappings([])).toBe(0);
+    });
+
+    it("handles mix of existing and non-existing IDs", () => {
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "a",
+        amazonId: "az-1",
+      });
+      const deleted = store.removeMappings(["ic-1", "no-such-id"]);
+      expect(deleted).toBe(1);
+    });
+  });
+
   describe("close", () => {
     it("can be called without error", () => {
       expect(() => store.close()).not.toThrow();
