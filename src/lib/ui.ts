@@ -15,7 +15,7 @@ export function renderUI(): string {
       color: #1a1a1a;
     }
     @media (prefers-color-scheme: dark) {
-      body { background: #1a1a1a; color: #e0e0e0; }
+      body { background: #1a1a1a; color: #333; }
       .card { background: #2a2a2a; border-color: #3a3a3a; }
       table th { background: #333; }
       table td { border-color: #3a3a3a; }
@@ -49,7 +49,7 @@ export function renderUI(): string {
       font-size: 0.85rem;
       font-weight: 500;
     }
-    @media (prefers-color-scheme: dark) { .badge { background: #444; } }
+    @media (prefers-color-scheme: dark) { .badge { background: #444; color: #e0e0e0; } }
     .toolbar {
       display: flex;
       gap: 0.5rem;
