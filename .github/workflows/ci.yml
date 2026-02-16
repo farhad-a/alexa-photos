@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  packages: none
 
 jobs:
   test:

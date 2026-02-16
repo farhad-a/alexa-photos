@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,29 +15,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Determine build mode
-        id: mode
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG=${GITHUB_REF#refs/tags/v}
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "VERSION=$TAG" >> $GITHUB_OUTPUT
-            echo "MAJOR=$(echo $TAG | cut -d. -f1)" >> $GITHUB_OUTPUT
-            echo "TAG_NAME=v$TAG" >> $GITHUB_OUTPUT
-            echo "docker_tags<<EOF" >> $GITHUB_OUTPUT
-            echo "ghcr.io/farhad-a/alexa-photos:latest" >> $GITHUB_OUTPUT
-            echo "ghcr.io/farhad-a/alexa-photos:$TAG" >> $GITHUB_OUTPUT
-            echo "ghcr.io/farhad-a/alexa-photos:$(echo $TAG | cut -d. -f1)" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            SHA=${GITHUB_SHA::7}
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "VERSION=test-$SHA" >> $GITHUB_OUTPUT
-            echo "docker_tags<<EOF" >> $GITHUB_OUTPUT
-            echo "ghcr.io/farhad-a/alexa-photos:test-$SHA" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -58,6 +34,14 @@ jobs:
           npm run build
           npm run test:run
 
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$TAG" >> $GITHUB_OUTPUT
+          echo "MAJOR=$(echo $TAG | cut -d. -f1)" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v$TAG" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -72,23 +56,25 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.mode.outputs.docker_tags }}
+          tags: |
+            ghcr.io/farhad-a/alexa-photos:latest
+            ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.VERSION }}
+            ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.MAJOR }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
 
       - name: Generate Release Notes
-        if: steps.mode.outputs.is_release == 'true'
         run: |
           # Create draft release with AI-generated notes
-          gh release create ${{ steps.mode.outputs.TAG_NAME }} \
-            --title "Release ${{ steps.mode.outputs.VERSION }}" \
+          gh release create ${{ steps.version.outputs.TAG_NAME }} \
+            --title "Release ${{ steps.version.outputs.VERSION }}" \
             --generate-notes \
             --draft
 
           # Fetch the auto-generated notes
-          gh release view ${{ steps.mode.outputs.TAG_NAME }} --json body -q .body > generated_notes.md
+          gh release view ${{ steps.version.outputs.TAG_NAME }} --json body -q .body > generated_notes.md
 
           # Append custom deployment instructions
           cat << 'EOF' >> generated_notes.md
@@ -98,12 +84,12 @@ jobs:
           ## 🐳 Docker Images
 
           ```bash
-          docker pull ghcr.io/farhad-a/alexa-photos:${{ steps.mode.outputs.VERSION }}
+          docker pull ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.VERSION }}
           ```
 
           ### Available tags:
-          - `${{ steps.mode.outputs.VERSION }}` - This specific version
-          - `${{ steps.mode.outputs.MAJOR }}` - Latest in v${{ steps.mode.outputs.MAJOR }}.x
+          - `${{ steps.version.outputs.VERSION }}` - This specific version
+          - `${{ steps.version.outputs.MAJOR }}` - Latest in v${{ steps.version.outputs.MAJOR }}.x
           - `latest` - Latest stable release
 
           ### 🚀 Deployment
@@ -112,7 +98,7 @@ jobs:
           ```yaml
           services:
             sync:
-              image: ghcr.io/farhad-a/alexa-photos:${{ steps.mode.outputs.VERSION }}
+              image: ghcr.io/farhad-a/alexa-photos:${{ steps.version.outputs.VERSION }}
               volumes:
                 - ./data:/app/data
               env_file:
@@ -127,11 +113,11 @@ jobs:
           ```
 
           ### 📊 Full Changelog
-          **Full Diff**: https://github.com/${{ github.repository }}/compare/${{ steps.mode.outputs.TAG_NAME }}
+          **Full Diff**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.TAG_NAME }}
           EOF
 
           # Update the release with combined notes and publish
-          gh release edit ${{ steps.mode.outputs.TAG_NAME }} \
+          gh release edit ${{ steps.version.outputs.TAG_NAME }} \
             --notes-file generated_notes.md \
             --draft=false
         env:
