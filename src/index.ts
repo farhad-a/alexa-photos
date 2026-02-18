@@ -4,14 +4,18 @@ import { logger as rootLogger } from "./lib/logger.js";
 const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
+import { AmazonClient } from "./amazon/client.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
 import { HealthServer } from "./lib/health.js";
+import { NotificationService } from "./lib/notifications.js";
 
 async function main() {
   logger.info(
     {
       pollIntervalSeconds: config.pollIntervalMs / 1000,
+      cookieRefreshIntervalHours:
+        config.cookieRefreshIntervalMs / (60 * 60 * 1000),
       albumName: config.amazonAlbumName,
       healthPort: config.healthPort,
     },
@@ -20,7 +24,17 @@ async function main() {
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
   const state = new StateStore();
-  const sync = new SyncEngine(icloud, state);
+
+  const notifications = new NotificationService(config);
+
+  const amazon = await AmazonClient.fromFile(
+    config.amazonCookiesPath,
+    config.amazonAutoRefreshCookies,
+    (message, level) => notifications.sendAlert(message, level),
+    notifications,
+  );
+
+  const sync = new SyncEngine(icloud, state, amazon);
 
   // Start health server
   const health = new HealthServer(config.healthPort, state);
@@ -28,6 +42,12 @@ async function main() {
 
   // Update health status to healthy initially
   health.updateMetrics({ status: "healthy" });
+
+  // Start proactive cookie refresh interval; on failure mark the service unhealthy
+  amazon.startRefreshInterval(config.cookieRefreshIntervalMs, () => {
+    sync.setAmazonAuthenticated(false);
+    health.updateMetrics({ status: "unhealthy", amazonAuthenticated: false });
+  });
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -47,15 +67,12 @@ async function main() {
       await sync.run();
       const metrics = sync.getMetrics();
       health.updateMetrics({
-        status: "healthy",
+        status: metrics.amazonAuthenticated ? "healthy" : "unhealthy",
         ...metrics,
       });
     } catch {
       const metrics = sync.getMetrics();
-      health.updateMetrics({
-        status: "unhealthy",
-        ...metrics,
-      });
+      health.updateMetrics({ status: "unhealthy", ...metrics });
     }
     logger.info(
       { nextSyncInSeconds: pollIntervalSeconds },

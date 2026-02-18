@@ -55,6 +55,7 @@ export class AmazonClient {
   private autoRefresh: boolean;
   private notificationCallback?: NotificationCallback;
   private notificationService?: NotificationService;
+  private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     cookies: AmazonCookies,
@@ -638,8 +639,24 @@ export class AmazonClient {
     return createHash("md5").update(buffer).digest("hex");
   }
 
-  /** No-op — REST client has no resources to release */
+  /** Start a proactive cookie refresh interval. Calls onRefreshFailed if the refresh returns false. */
+  startRefreshInterval(intervalMs: number, onRefreshFailed?: () => void): void {
+    this.refreshIntervalId = setInterval(() => {
+      this.refreshCookies().then((ok) => {
+        if (!ok) onRefreshFailed?.();
+      });
+    }, intervalMs);
+    logger.info(
+      { intervalHours: intervalMs / (60 * 60 * 1000) },
+      "Amazon cookie refresh interval started",
+    );
+  }
+
+  /** Close the client and clear any active refresh interval. */
   async close(): Promise<void> {
-    // Nothing to clean up (no browser, no persistent connection)
+    if (this.refreshIntervalId !== null) {
+      clearInterval(this.refreshIntervalId);
+      this.refreshIntervalId = null;
+    }
   }
 }

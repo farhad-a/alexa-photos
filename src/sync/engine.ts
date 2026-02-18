@@ -34,10 +34,13 @@ export class SyncEngine {
     amazonAuthenticated: false,
   };
 
-  constructor(icloud: ICloudClient, state: StateStore) {
+  constructor(icloud: ICloudClient, state: StateStore, amazon?: AmazonClient) {
     this.icloud = icloud;
     this.state = state;
     this.notifications = new NotificationService(config);
+    if (amazon) {
+      this.amazon = amazon;
+    }
   }
 
   getMetrics(): SyncMetrics {
@@ -161,7 +164,12 @@ export class SyncEngine {
     }
   }
 
+  setAmazonAuthenticated(value: boolean): void {
+    this.metrics.amazonAuthenticated = value;
+  }
+
   private async ensureAmazonClient(): Promise<void> {
+    // 1. Create client if not pre-injected
     if (!this.amazon) {
       this.amazon = await AmazonClient.fromFile(
         config.amazonCookiesPath,
@@ -169,8 +177,10 @@ export class SyncEngine {
         (message, level) => this.notifications.sendAlert(message, level),
         this.notifications,
       );
+    }
 
-      // Verify auth on first use
+    // 2. Verify auth (once per authentication state reset)
+    if (!this.metrics.amazonAuthenticated) {
       const ok = await this.amazon.checkAuth();
       if (!ok) {
         throw new Error(
@@ -181,6 +191,7 @@ export class SyncEngine {
       this.metrics.amazonAuthenticated = true;
     }
 
+    // 3. Find or create album (lazy)
     if (!this.albumId) {
       this.albumId = await this.amazon.findOrCreateAlbum(
         config.amazonAlbumName,

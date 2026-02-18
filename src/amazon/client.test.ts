@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AmazonClient, AmazonCookies } from "./client.js";
 
 // Mock global fetch
@@ -520,6 +520,70 @@ describe("AmazonClient", () => {
         "Amazon Photos cookies refreshed successfully",
         "info",
       );
+    });
+  });
+
+  describe("startRefreshInterval", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("calls onRefreshFailed when refresh returns false", async () => {
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: false });
+      vi.spyOn(client as any, "refreshCookies").mockResolvedValue(false);
+
+      const onFailed = vi.fn();
+      client.startRefreshInterval(1000, onFailed);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(onFailed).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not call onRefreshFailed when refresh succeeds", async () => {
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: false });
+      vi.spyOn(client as any, "refreshCookies").mockResolvedValue(true);
+
+      const onFailed = vi.fn();
+      client.startRefreshInterval(1000, onFailed);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(onFailed).not.toHaveBeenCalled();
+    });
+
+    it("fires multiple times over multiple intervals", async () => {
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: false });
+      const refreshSpy = vi
+        .spyOn(client as any, "refreshCookies")
+        .mockResolvedValue(true);
+
+      client.startRefreshInterval(1000);
+
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(refreshSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it("stops firing after close()", async () => {
+      const client = new AmazonClient(makeUsCookies(), { autoRefresh: false });
+      const refreshSpy = vi
+        .spyOn(client as any, "refreshCookies")
+        .mockResolvedValue(true);
+
+      client.startRefreshInterval(1000);
+      await client.close();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(refreshSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("close", () => {
+    it("resolves without error when no interval is active", async () => {
+      const client = new AmazonClient(makeUsCookies());
+      await expect(client.close()).resolves.not.toThrow();
     });
   });
 

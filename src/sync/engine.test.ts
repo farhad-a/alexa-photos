@@ -508,6 +508,73 @@ describe("SyncEngine", () => {
     });
   });
 
+  describe("pre-injected AmazonClient", () => {
+    it("skips fromFile when amazon is passed to constructor", async () => {
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      const injectedEngine = new SyncEngine(
+        icloud,
+        new StateStore(),
+        getAmazonMock(),
+      );
+      await injectedEngine.run();
+
+      expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+      // checkAuth still called to verify credentials
+      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not call checkAuth again on subsequent syncs", async () => {
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      const injectedEngine = new SyncEngine(
+        icloud,
+        new StateStore(),
+        getAmazonMock(),
+      );
+      await injectedEngine.run();
+      await injectedEngine.run();
+
+      // checkAuth only called on the first sync
+      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("setAmazonAuthenticated", () => {
+    it("causes checkAuth to be called again on the next sync", async () => {
+      // First run: p1 is new
+      // Second run: p2 is also new, so needsAmazon=true and checkAuth fires again
+      vi.spyOn(icloud, "getPhotos")
+        .mockResolvedValueOnce([makePhoto("p1")])
+        .mockResolvedValueOnce([makePhoto("p1"), makePhoto("p2")]);
+
+      const injectedEngine = new SyncEngine(
+        icloud,
+        new StateStore(),
+        getAmazonMock(),
+      );
+      await injectedEngine.run();
+      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
+
+      // Proactive refresh failed — reset auth flag
+      injectedEngine.setAmazonAuthenticated(false);
+
+      await injectedEngine.run();
+      // checkAuth fired again after the reset
+      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it("exposes amazonAuthenticated in getMetrics", () => {
+      engine.setAmazonAuthenticated(true);
+      expect(engine.getMetrics().amazonAuthenticated).toBe(true);
+
+      engine.setAmazonAuthenticated(false);
+      expect(engine.getMetrics().amazonAuthenticated).toBe(false);
+    });
+  });
+
   describe("error handling", () => {
     it("continues to next photo if one upload fails", async () => {
       const photos = [makePhoto("p1"), makePhoto("p2")];

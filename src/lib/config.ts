@@ -17,6 +17,10 @@ const configSchema = z.object({
   pushoverToken: z.string().optional(),
   pushoverUser: z.string().optional(),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  cookieRefreshIntervalMs: z.coerce
+    .number()
+    .default(23)
+    .transform((h) => h * 60 * 60 * 1000),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -36,6 +40,7 @@ function loadConfig(): Config {
     pushoverToken: process.env.PUSHOVER_TOKEN,
     pushoverUser: process.env.PUSHOVER_USER,
     logLevel: process.env.LOG_LEVEL,
+    cookieRefreshIntervalMs: process.env.COOKIE_REFRESH_INTERVAL_HOURS,
   });
 }
 
