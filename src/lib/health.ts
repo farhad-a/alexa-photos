@@ -2,23 +2,13 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 import { logger as rootLogger } from "./logger.js";
 import { StateStore } from "../state/store.js";
 import { renderUI } from "./ui.js";
+import { SyncMetrics } from "../sync/engine.js";
 
 const logger = rootLogger.child({ component: "health" });
 
-export interface HealthMetrics {
+export interface HealthMetrics extends SyncMetrics {
   status: "healthy" | "unhealthy" | "starting";
   uptime: number;
-  lastSync?: {
-    timestamp: Date;
-    durationMs: number;
-    photosAdded: number;
-    photosRemoved: number;
-    success: boolean;
-    error?: string;
-  };
-  totalSyncs: number;
-  totalErrors: number;
-  amazonAuthenticated: boolean;
 }
 
 export class HealthServer {

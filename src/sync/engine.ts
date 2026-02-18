@@ -19,6 +19,7 @@ export interface SyncMetrics {
   totalSyncs: number;
   totalErrors: number;
   amazonAuthenticated: boolean;
+  nextSync?: Date;
 }
 
 export class SyncEngine {
@@ -166,6 +167,10 @@ export class SyncEngine {
 
   setAmazonAuthenticated(value: boolean): void {
     this.metrics.amazonAuthenticated = value;
+  }
+
+  setNextSync(date: Date): void {
+    this.metrics.nextSync = date;
   }
 
   private async ensureAmazonClient(): Promise<void> {

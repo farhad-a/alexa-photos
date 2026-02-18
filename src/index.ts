@@ -68,14 +68,17 @@ async function main() {
   // Run sync and update health metrics
   const pollIntervalSeconds = config.pollIntervalMs / 1000;
   const runSyncWithMetrics = async () => {
+    const nextSync = new Date(Date.now() + config.pollIntervalMs);
     try {
       await sync.run();
+      sync.setNextSync(nextSync);
       const metrics = sync.getMetrics();
       health.updateMetrics({
         status: metrics.amazonAuthenticated ? "healthy" : "unhealthy",
         ...metrics,
       });
     } catch {
+      sync.setNextSync(nextSync);
       const metrics = sync.getMetrics();
       health.updateMetrics({ status: "unhealthy", ...metrics });
     }
