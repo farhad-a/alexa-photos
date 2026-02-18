@@ -40,8 +40,13 @@ async function main() {
   const health = new HealthServer(config.healthPort, state);
   await health.start();
 
-  // Update health status to healthy initially
-  health.updateMetrics({ status: "healthy" });
+  // Refresh cookies immediately at startup — manually-provided cookies may be
+  // hours old, so we reset the expiry clock before arming the interval.
+  // Fall back to checkAuth() if refresh fails (e.g. session token expired).
+  const startupRefreshed = await amazon.refreshNow();
+  const authOk = startupRefreshed || (await amazon.checkAuth());
+  sync.setAmazonAuthenticated(authOk);
+  health.updateMetrics({ status: authOk ? "healthy" : "unhealthy" });
 
   // Start proactive cookie refresh interval; on failure mark the service unhealthy
   amazon.startRefreshInterval(config.cookieRefreshIntervalMs, () => {

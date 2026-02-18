@@ -639,6 +639,11 @@ export class AmazonClient {
     return createHash("md5").update(buffer).digest("hex");
   }
 
+  /** Refresh cookies immediately. Returns true if successful. */
+  async refreshNow(): Promise<boolean> {
+    return this.refreshCookies();
+  }
+
   /** Start a proactive cookie refresh interval. Calls onRefreshFailed if the refresh returns false. */
   startRefreshInterval(intervalMs: number, onRefreshFailed?: () => void): void {
     this.refreshIntervalId = setInterval(() => {
