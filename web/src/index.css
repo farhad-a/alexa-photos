@@ -489,3 +489,62 @@ textarea.cookie-paste {
   min-height: 80px;
   resize: vertical;
 }
+
+/* Home page */
+.home-subtitle {
+  margin-bottom: 1rem;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-subtitle {
+    color: #aaa;
+  }
+}
+
+.home-links {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.home-link {
+  display: block;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+}
+
+.home-link:hover {
+  border-color: #2563eb;
+  background: #f8fbff;
+}
+
+.home-link h3 {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.home-link p {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-link {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+  }
+
+  .home-link:hover {
+    background: #1e3a5f;
+    border-color: #60a5fa;
+  }
+
+  .home-link p {
+    color: #aaa;
+  }
+}
