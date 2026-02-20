@@ -52,8 +52,8 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 
 1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
 2. Open DevTools → Application → Cookies → `www.amazon.com`
-3. Run `npm run amazon:setup` and paste the three cookie values:
-   - **US**: `session-id`, `ubid_main`, `at_main`
+3. Run `npm run amazon:setup` and paste the cookie values:
+   - **US**: `session-id`, `ubid-main`, `at-main`, `x-main`, `sess-at-main`, `sst-main`
    - **International**: `session-id`, `ubid-acb{tld}`, `at-acb{tld}`
 4. Cookies are saved to `./data/amazon-cookies.json`
 
@@ -100,6 +100,7 @@ docker compose logs -f
 | `npm run dev`                | Start sync service in watch mode |
 | `npm run build`              | Build for production             |
 | `npm run start`              | Run production build             |
+| `npm run ci`                 | Run full CI pipeline (build + format + lint + test) |
 | `npm run icloud:test`        | Test iCloud album fetch          |
 | `npm run amazon:setup`       | Save Amazon Photos cookies       |
 | `npm run notifications:test` | Test notification system         |
@@ -115,19 +116,19 @@ docker compose logs -f
 
 ## CI / Testing
 
-Run the full CI pipeline locally:
+Run the full CI pipeline locally with a single command:
+
+```bash
+npm run ci  # build + format:check + lint + test (141 tests)
+```
+
+Or run steps individually:
 
 ```bash
 npm run format:check  # Check code formatting
 npm run lint          # Check for lint errors
 npm run build         # TypeScript compilation
-npm run test:run      # Run test suite (86 tests)
-```
-
-Or run all checks at once:
-
-```bash
-npm run format:check && npm run lint && npm run build && npm run test:run
+npm run test:run      # Run test suite
 ```
 
 Additional commands:
@@ -261,7 +262,7 @@ The service will send to all configured channels in parallel.
 1. **Poll iCloud**: Fetches photo list from shared album's public API
 2. **Compare State**: Checks local SQLite database for sync status
 3. **Sync Changes**:
-   - New photos: Download from iCloud → Upload to Amazon Photos → Add to album
+   - New photos: Check checksum → if duplicate content exists, reuse Amazon node → else download from iCloud → Upload to Amazon Photos → Add to album
    - Removed photos (if `SYNC_DELETIONS=true`): Remove from album → Trash → Purge from Amazon Photos
 4. **Update State**: Record new mappings in database
 
@@ -314,6 +315,14 @@ Returns detailed metrics:
 
 **Docker health check**: The compose file includes automatic health checks using the `/health` endpoint.
 
+### Admin UI
+
+A web-based admin interface is available at `http://localhost:3000/`. Use it to:
+
+- Browse and search photo mappings (iCloud ↔ Amazon Photos)
+- Delete individual mappings to force a resync on next poll
+- Paginate through large sync histories
+
 ## Tips & Advanced Usage
 
 ### Rate Limiting
@@ -352,6 +361,10 @@ To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.
 - Verify the album has "Public Website" enabled
 - Check the token is correct (part after `#` in URL)
 - Try accessing the public URL in a browser
+
+### Photo Deleted from Amazon Photos Directly
+
+If you delete a photo directly from Amazon Photos (not via the sync service), the local mapping still exists and the engine will skip that photo indefinitely — it won't re-upload it. To force a resync, delete the mapping via the admin UI at `http://localhost:3000/`, then the next poll will re-upload the photo.
 
 ### Sync Not Running
 
