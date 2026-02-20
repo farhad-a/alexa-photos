@@ -7,7 +7,7 @@ import { ICloudClient } from "./icloud/client.js";
 import { AmazonClient } from "./amazon/client.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
-import { HealthServer } from "./lib/health.js";
+import { AppServer } from "./server/index.js";
 import { NotificationService } from "./lib/notifications.js";
 
 async function main() {
@@ -36,8 +36,12 @@ async function main() {
 
   const sync = new SyncEngine(icloud, state, amazon);
 
-  // Start health server
-  const health = new HealthServer(config.healthPort, state);
+  // Start app server (health, API, admin UI)
+  const health = new AppServer({
+    port: config.healthPort,
+    state,
+    cookiesPath: config.amazonCookiesPath,
+  });
   await health.start();
 
   // Refresh cookies immediately at startup — manually-provided cookies may be

@@ -1,24 +1,29 @@
 # Multi-stage build for alexa-photos sync service
 
-# Stage 1: Build TypeScript
+# Stage 1: Build frontend (React)
+FROM node:25-slim AS web-builder
+
+WORKDIR /app/web
+
+COPY web/package*.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build backend (TypeScript)
 FROM node:25-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install all dependencies (including dev dependencies for build)
 RUN npm ci
 
-# Copy source code
 COPY src/ ./src/
 COPY tsconfig.json ./
-
-# Build TypeScript
 RUN npm run build
 
-# Stage 2: Runtime
+# Stage 3: Runtime
 FROM node:25-slim
 
 # Install curl for healthcheck
@@ -34,8 +39,11 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --omit=dev
 
-# Copy compiled output from builder
+# Copy compiled backend from builder
 COPY --from=builder /app/dist/ ./dist/
+
+# Copy compiled frontend from web-builder
+COPY --from=web-builder /app/web/dist/ ./web/dist/
 
 # Create data directory (host should mount volume here)
 RUN mkdir -p /app/data
@@ -43,7 +51,7 @@ RUN mkdir -p /app/data
 # Set production environment
 ENV NODE_ENV=production
 
-# Expose health endpoint
+# Expose health/UI endpoint
 EXPOSE 3000
 
 # Add healthcheck to ensure the service is running and healthy

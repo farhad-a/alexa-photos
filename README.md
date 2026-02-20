@@ -98,9 +98,12 @@ docker compose logs -f
 | Command                      | Description                      |
 | ---------------------------- | -------------------------------- |
 | `npm run dev`                | Start sync service in watch mode |
-| `npm run build`              | Build for production             |
+| `npm run build`              | Build backend for production     |
+| `npm run web:install`        | Install frontend dependencies     |
+| `npm run web:dev`            | Start React UI (Vite dev server) |
+| `npm run web:build`          | Build React UI for production     |
 | `npm run start`              | Run production build             |
-| `npm run ci`                 | Run full CI pipeline (build + format + lint + test) |
+| `npm run ci`                 | Run full CI pipeline (backend + frontend + format + lint + test) |
 | `npm run icloud:test`        | Test iCloud album fetch          |
 | `npm run amazon:setup`       | Save Amazon Photos cookies       |
 | `npm run notifications:test` | Test notification system         |
@@ -119,7 +122,7 @@ docker compose logs -f
 Run the full CI pipeline locally with a single command:
 
 ```bash
-npm run ci  # build + format:check + lint + test (141 tests)
+npm run ci  # backend build + frontend build + format:check + lint + test (148 tests)
 ```
 
 Or run steps individually:
@@ -127,7 +130,8 @@ Or run steps individually:
 ```bash
 npm run format:check  # Check code formatting
 npm run lint          # Check for lint errors
-npm run build         # TypeScript compilation
+npm run build         # Backend TypeScript compilation
+npm run web:build     # Frontend (React/Vite) build
 npm run test:run      # Run test suite
 ```
 
@@ -319,9 +323,12 @@ Returns detailed metrics:
 
 A web-based admin interface is available at `http://localhost:3000/`. Use it to:
 
-- Browse and search photo mappings (iCloud ↔ Amazon Photos)
-- Delete individual mappings to force a resync on next poll
-- Paginate through large sync histories
+- Browse, search, and paginate photo mappings (iCloud ↔ Amazon Photos)
+- Delete individual mappings or bulk-delete selected mappings to force a resync
+- View and manage Amazon authentication cookies
+- Test current cookie auth status against Amazon
+
+The frontend now lives in `web/` (React + Vite), and production assets are served by the backend from `web/dist`.
 
 ## Tips & Advanced Usage
 

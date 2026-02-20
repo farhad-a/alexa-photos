@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { HealthServer } from "./health.js";
+import { AppServer } from "./index.js";
 import { StateStore } from "../state/store.js";
 
 // Mock the logger
@@ -14,7 +14,7 @@ const mockLogger = vi.hoisted(() => {
   m.child.mockReturnValue(m);
   return m;
 });
-vi.mock("./logger.js", () => ({ logger: mockLogger }));
+vi.mock("../lib/logger.js", () => ({ logger: mockLogger }));
 
 // Override DB_PATH to use in-memory database
 vi.mock("better-sqlite3", async (importOriginal) => {
@@ -34,12 +34,12 @@ function url(path: string): string {
   return `http://localhost:${TEST_PORT}${path}`;
 }
 
-describe("HealthServer", () => {
+describe("AppServer", () => {
   describe("without state store", () => {
-    let server: HealthServer;
+    let server: AppServer;
 
     beforeEach(async () => {
-      server = new HealthServer(TEST_PORT);
+      server = new AppServer({ port: TEST_PORT, staticDir: "/nonexistent" });
       await server.start();
     });
 
@@ -64,11 +64,6 @@ describe("HealthServer", () => {
       expect(json).toHaveProperty("totalErrors");
     });
 
-    it("GET / returns 404 without state store", async () => {
-      const res = await fetch(url("/"));
-      expect(res.status).toBe(404);
-    });
-
     it("GET /api/mappings returns 404 without state store", async () => {
       const res = await fetch(url("/api/mappings"));
       expect(res.status).toBe(404);
@@ -76,26 +71,22 @@ describe("HealthServer", () => {
   });
 
   describe("with state store", () => {
-    let server: HealthServer;
+    let server: AppServer;
     let store: StateStore;
 
     beforeEach(async () => {
       store = new StateStore();
-      server = new HealthServer(TEST_PORT, store);
+      server = new AppServer({
+        port: TEST_PORT,
+        state: store,
+        staticDir: "/nonexistent",
+      });
       await server.start();
     });
 
     afterEach(async () => {
       await server.stop();
       store.close();
-    });
-
-    it("GET / returns HTML", async () => {
-      const res = await fetch(url("/"));
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("text/html");
-      const body = await res.text();
-      expect(body).toContain("Photo Mappings");
     });
 
     it("GET /health still works", async () => {
