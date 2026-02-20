@@ -86,10 +86,18 @@ export class SyncEngine {
         "Sync analysis complete",
       );
 
+      // Keep auth metrics fresh every run, even when there's no add/remove work.
+      const authOk = await this.refreshAmazonAuthStatus();
+
       // Initialize Amazon client only if we have work to do
       const needsAmazon =
         toAdd.length > 0 || (toRemove.length > 0 && config.syncDeletions);
       if (needsAmazon) {
+        if (!authOk) {
+          throw new Error(
+            "Amazon Photos authentication failed — run `npm run amazon:setup` to update cookies",
+          );
+        }
         await this.ensureAmazonClient();
       }
 
@@ -171,6 +179,32 @@ export class SyncEngine {
 
   setNextSync(date: Date): void {
     this.metrics.nextSync = date;
+  }
+
+  private async refreshAmazonAuthStatus(): Promise<boolean> {
+    try {
+      // Create client lazily so auth status can be checked even on no-op syncs.
+      if (!this.amazon) {
+        this.amazon = await AmazonClient.fromFile(
+          config.amazonCookiesPath,
+          config.amazonAutoRefreshCookies,
+          (message, level) => this.notifications.sendAlert(message, level),
+          this.notifications,
+        );
+      }
+
+      const ok = await this.amazon.checkAuth();
+      this.metrics.amazonAuthenticated = ok;
+      if (!ok) {
+        this.albumId = null;
+      }
+      return ok;
+    } catch (error) {
+      logger.warn({ error }, "Failed to refresh Amazon auth status");
+      this.metrics.amazonAuthenticated = false;
+      this.albumId = null;
+      return false;
+    }
   }
 
   private async ensureAmazonClient(): Promise<void> {

@@ -24,6 +24,7 @@ export interface AppServerOptions {
   state?: StateStore;
   cookiesPath?: string;
   staticDir?: string;
+  onAmazonAuthChecked?: (authenticated: boolean) => void;
 }
 
 export class AppServer {
@@ -34,12 +35,14 @@ export class AppServer {
   private state: StateStore | null;
   private cookiesPath: string;
   private staticDir: string;
+  private onAmazonAuthChecked?: (authenticated: boolean) => void;
 
   constructor(options: AppServerOptions) {
     this.port = options.port;
     this.state = options.state ?? null;
     this.cookiesPath = options.cookiesPath ?? "./data/amazon-cookies.json";
     this.startTime = new Date();
+    this.onAmazonAuthChecked = options.onAmazonAuthChecked;
     this.staticDir =
       options.staticDir ??
       path.resolve(
@@ -339,6 +342,7 @@ export class AppServer {
       const cookies = JSON.parse(raw) as AmazonCookies;
       const client = new AmazonClient(cookies, { autoRefresh: false });
       const authenticated = await client.checkAuth();
+      this.onAmazonAuthChecked?.(authenticated);
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ authenticated }));
@@ -348,6 +352,7 @@ export class AppServer {
         "code" in err &&
         (err as NodeJS.ErrnoException).code === "ENOENT";
       if (isNotFound) {
+        this.onAmazonAuthChecked?.(false);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
@@ -358,6 +363,7 @@ export class AppServer {
         return;
       }
       logger.error({ error: err }, "Cookie test failed");
+      this.onAmazonAuthChecked?.(false);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({

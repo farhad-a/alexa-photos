@@ -41,6 +41,13 @@ async function main() {
     port: config.healthPort,
     state,
     cookiesPath: config.amazonCookiesPath,
+    onAmazonAuthChecked: (authenticated) => {
+      sync.setAmazonAuthenticated(authenticated);
+      health.updateMetrics({
+        status: authenticated ? "healthy" : "unhealthy",
+        amazonAuthenticated: authenticated,
+      });
+    },
   });
   await health.start();
 
@@ -50,7 +57,10 @@ async function main() {
   const startupRefreshed = await amazon.refreshNow();
   const authOk = startupRefreshed || (await amazon.checkAuth());
   sync.setAmazonAuthenticated(authOk);
-  health.updateMetrics({ status: authOk ? "healthy" : "unhealthy" });
+  health.updateMetrics({
+    status: authOk ? "healthy" : "unhealthy",
+    amazonAuthenticated: authOk,
+  });
 
   // Start proactive cookie refresh interval; on failure mark the service unhealthy
   amazon.startRefreshInterval(config.cookieRefreshIntervalMs, () => {

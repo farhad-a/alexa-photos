@@ -139,8 +139,8 @@ describe("SyncEngine", () => {
     it("does nothing when iCloud is empty and no mappings exist", async () => {
       await engine.run();
 
-      // Amazon client should not even be initialized
-      expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+      // Auth status is now refreshed every run, even for no-op syncs.
+      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
     });
 
     it("does nothing when all photos are already synced", async () => {
@@ -154,8 +154,8 @@ describe("SyncEngine", () => {
 
       await engine.run();
 
-      // No work to do → no Amazon client needed
-      expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+      // Auth status is now refreshed every run, even for no-op syncs.
+      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -423,8 +423,8 @@ describe("SyncEngine", () => {
         // Mapping should still exist (not deleted)
         expect(mockMappings.has("old-photo")).toBe(true);
 
-        // Amazon client should not be initialized (no work to do)
-        expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+        // Auth status is now refreshed every run, even when deletions are skipped.
+        expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
       } finally {
         // Restore original value
         (configModule.config as any).syncDeletions = originalSyncDeletions;
@@ -525,7 +525,7 @@ describe("SyncEngine", () => {
       expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
     });
 
-    it("does not call checkAuth again on subsequent syncs", async () => {
+    it("refreshes auth status on subsequent syncs", async () => {
       const photo = makePhoto("p1");
       vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
 
@@ -537,8 +537,8 @@ describe("SyncEngine", () => {
       await injectedEngine.run();
       await injectedEngine.run();
 
-      // checkAuth only called on the first sync
-      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
+      // Auth status is refreshed each run.
+      expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(2);
     });
   });
 
