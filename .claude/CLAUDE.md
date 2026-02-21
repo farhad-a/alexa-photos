@@ -13,12 +13,18 @@ src/
 ├── amazon/client.ts      # Amazon Photos REST API (cookie-based auth)
 ├── sync/engine.ts        # Orchestrates diff detection and sync operations
 ├── state/store.ts        # SQLite mappings: icloud_id ↔ amazon_id
+├── server/
+│   ├── index.ts          # AppServer: health, metrics, mappings API, cookies API
+│   └── static.ts         # Static file serving + SPA fallback
 └── lib/
     ├── config.ts         # Zod-validated env config
     ├── logger.ts         # Pino structured logging
-    ├── notifications.ts  # Webhook/Pushover alerting
-    ├── health.ts         # HTTP server: health, metrics, and mappings API
-    └── ui.ts             # Admin UI (inline HTML/CSS/JS served from health server)
+    └── notifications.ts  # Webhook/Pushover alerting
+
+web/
+├── src/pages/Home.tsx     # Admin landing page
+├── src/pages/Mappings.tsx # Photo mappings UI
+└── src/pages/Cookies.tsx  # Amazon cookie management UI
 ```
 
 ## Key Patterns & Conventions
@@ -60,14 +66,15 @@ src/
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
 ### SyncEngine ([src/sync/engine.ts](src/sync/engine.ts))
-- **Dependency injection**: Accepts `StateStore` via constructor — shared with `HealthServer` for the admin UI
+- **Dependency injection**: Accepts `StateStore` via constructor — shared with `AppServer` for admin APIs
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
 - **Additions**: Check checksum for existing content → if found, reuse Amazon node + add to album → else download → upload → add to album → save mapping
 - **Checksum dedup**: Queries `StateStore.getMappingByChecksum()` before uploading — avoids re-uploading when photo GUID changes but content is identical
 - **Deletions** (if `SYNC_DELETIONS=true`): remove from album → trash → purge → delete mapping
 - **Append-only mode**: `SYNC_DELETIONS=false` preserves all photos in Amazon
 - **Rate limiting**: Optional `UPLOAD_DELAY_MS` adds delay between uploads
-- **Lazy initialization**: Amazon client created only when sync work exists
+- **Auth freshness on every poll**: `checkAuth()` runs each sync cycle so `metrics.amazonAuthenticated` stays current even on no-op syncs
+- **Lazy work initialization**: Album lookup/work paths only execute when add/remove work exists
 - **Concurrency guard**: `isRunning` flag prevents overlapping runs
 - **Error handling**: Per-photo errors are caught in the run loop (not inside `addPhoto`) so `photosAdded`/`photosFailed` counts are accurate
 - **Sync summary**: "Sync complete" log includes `{ durationMs, photosAdded, photosFailed, photosRemoved }`
@@ -75,7 +82,7 @@ src/
 
 ### StateStore ([src/state/store.ts](src/state/store.ts))
 - **SQLite** via `better-sqlite3`
-- **Shared singleton**: Created in `index.ts`, injected into both `SyncEngine` and `HealthServer`
+- **Shared singleton**: Created in `index.ts`, injected into both `SyncEngine` and `AppServer`
 - **Table**: `photo_mappings` (icloud_id PK, icloud_checksum, amazon_id, synced_at)
 - **Indexes**: `amazon_id`, `icloud_checksum`
 - **Key methods**: `getMappingByChecksum()` for deduplication, `getMappingsPaginated()` for UI, `removeMappings()` for bulk delete
@@ -92,13 +99,17 @@ npm run amazon:setup
 # Run sync service in watch mode
 npm run dev
 
+# Frontend dev/build
+npm run web:dev
+npm run web:build
+
 # Test notifications (webhook and/or Pushover)
 npm run notifications:test
 
 # Run tests
 npm test
 
-# Run full CI checks locally (build + format + lint + test)
+# Run full CI checks locally (backend build + frontend build + format + lint + test)
 npm run ci
 ```
 
@@ -108,7 +119,11 @@ npm run ci
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`. If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
-- **Admin UI**: `http://localhost:3000/` — web UI for managing photo mappings (search, paginate, delete to force resync)
+- **Admin UI**: `http://localhost:3000/` — React UI served by backend (`web/dist`)
+  - Home dashboard (`/`) with links to feature pages
+  - Photo mappings (`/mappings`): search, paginate, single-delete, bulk-delete
+  - Amazon cookies (`/cookies`): view/save/test auth cookies
+- **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/cookies/test`
 
 ## Important Notes & Gotchas
 
@@ -128,8 +143,8 @@ npm run ci
 
 ## Testing
 
-- **141 tests** across 7 test files
-- Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications, health/API endpoints
+- **148 tests** across 7 test files
+- Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications, server/API endpoints
 - Run with `npm test`
 
 ## Design Decisions
