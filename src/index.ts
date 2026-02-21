@@ -62,10 +62,13 @@ async function main() {
     amazonAuthenticated: authOk,
   });
 
-  // Start proactive cookie refresh interval; on failure mark the service unhealthy
+  // Start proactive cookie refresh interval.
+  // Refresh failures are noisy but not always definitive auth failures,
+  // so we alert via logs/notifications and let sync-time auth checks be source of truth.
   amazon.startRefreshInterval(config.cookieRefreshIntervalMs, () => {
-    sync.setAmazonAuthenticated(false);
-    health.updateMetrics({ status: "unhealthy", amazonAuthenticated: false });
+    logger.warn(
+      "Cookie refresh failed; deferring health-state changes to sync auth checks",
+    );
   });
 
   // Graceful shutdown
@@ -81,14 +84,27 @@ async function main() {
 
   // Run sync and update health metrics
   const pollIntervalSeconds = config.pollIntervalMs / 1000;
+  let consecutiveAuthFailures = 0;
   const runSyncWithMetrics = async () => {
     const nextSync = new Date(Date.now() + config.pollIntervalMs);
     try {
       await sync.run();
       sync.setNextSync(nextSync);
       const metrics = sync.getMetrics();
+
+      if (metrics.amazonAuthenticated) {
+        consecutiveAuthFailures = 0;
+      } else {
+        consecutiveAuthFailures += 1;
+      }
+
+      const status =
+        metrics.amazonAuthenticated || consecutiveAuthFailures < 2
+          ? "healthy"
+          : "unhealthy";
+
       health.updateMetrics({
-        status: metrics.amazonAuthenticated ? "healthy" : "unhealthy",
+        status,
         ...metrics,
       });
     } catch {
