@@ -154,9 +154,11 @@ npm test           # Run tests in watch mode
 | `AMAZON_COOKIES_PATH`         | Path to cookies JSON file                   | `./data/amazon-cookies.json` |
 | `AMAZON_ALBUM_NAME`           | Album name in Amazon Photos                 | `Echo Show`                  |
 | `AMAZON_AUTO_REFRESH_COOKIES` | Automatically refresh expired auth tokens   | `true`                       |
+| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `23`                      |
 | `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
 | `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
 | `UPLOAD_DELAY_MS`             | Delay between uploads (rate limiting)       | `0` (no delay)               |
+| `HEALTH_PORT`                 | Port for health/metrics/admin HTTP server   | `3000`                       |
 | `LOG_LEVEL`                   | Logging level                               | `info`                       |
 | `ALERT_WEBHOOK_URL`           | Webhook URL for alerts (optional)           | (none)                       |
 | `PUSHOVER_TOKEN`              | Pushover app token (optional)               | (none)                       |
@@ -359,7 +361,7 @@ UPLOAD_DELAY_MS=1000
 
 ### Amazon Cookies Expired
 
-The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-main`, `sst-main`). If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to run `npm run amazon:setup` again to save fresh cookies from your browser.
+The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-main`, `sst-main`). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `23`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to run `npm run amazon:setup` again to save fresh cookies from your browser.
 
 To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 
