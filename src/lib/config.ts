@@ -35,8 +35,7 @@ function loadConfig(): Config {
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     uploadDelayMs: process.env.UPLOAD_DELAY_MS,
-    // Prefer SERVER_PORT; keep HEALTH_PORT as legacy fallback for compatibility.
-    serverPort: process.env.SERVER_PORT ?? process.env.HEALTH_PORT,
+    serverPort: process.env.SERVER_PORT,
     alertWebhookUrl: process.env.ALERT_WEBHOOK_URL,
     pushoverToken: process.env.PUSHOVER_TOKEN,
     pushoverUser: process.env.PUSHOVER_USER,
