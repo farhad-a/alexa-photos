@@ -562,30 +562,42 @@ textarea.cookie-paste {
 }
 
 .mappings-actions-col {
-  width: 60px;
+  width: 40px;
   text-align: center;
 }
 
 .mappings-delete-btn {
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 1.4rem;
+  height: 1.4rem;
   padding: 0;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: 700;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  font-size: 0.75rem;
+  line-height: 0;
+  font-weight: 600;
+  opacity: 0.6;
+  transition: opacity 0.15s, transform 0.1s;
 }
 
 .mappings-delete-btn:hover {
-  transform: translateY(-1px);
+  opacity: 1;
 }
 
 .mappings-delete-btn:active {
-  transform: translateY(0);
+  transform: scale(0.9);
+}
+
+/* Selected row highlight */
+.mappings-table tr.selected td {
+  background: #eff6ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mappings-table tr.selected td {
+    background: #1e3a5f;
+  }
 }
 
 .mappings-page-label {

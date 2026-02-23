@@ -261,7 +261,7 @@ export default function Mappings() {
                   {data.map((m) => {
                     const dateStr = formatDateTime(m.syncedAt);
                     return (
-                      <tr key={m.icloudId}>
+                      <tr key={m.icloudId} className={selected.has(m.icloudId) ? "selected" : undefined}>
                         <td className="mappings-select-col">
                           <input
                             type="checkbox"
