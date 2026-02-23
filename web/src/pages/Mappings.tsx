@@ -15,6 +15,38 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+interface MappingsResponse {
+  data: Mapping[];
+  pagination: PaginationInfo;
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+async function parseJsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = (await res.json()) as { error?: string };
+      if (err.error) message = err.error;
+    } catch {
+      // ignore JSON parse failures for error bodies
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as T;
+}
+
 export default function Mappings() {
   const [data, setData] = useState<Mapping[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
@@ -23,13 +55,19 @@ export default function Mappings() {
     totalItems: 0,
     totalPages: 1,
   });
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(50);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAbortController = useRef<AbortController | null>(null);
 
   const fetchMappings = useCallback(
     async (page?: number) => {
+      fetchAbortController.current?.abort();
+      const controller = new AbortController();
+      fetchAbortController.current = controller;
+
       const params = new URLSearchParams({
         page: String(page ?? 1),
         pageSize: String(pageSize),
@@ -39,11 +77,19 @@ export default function Mappings() {
       if (search) params.set("search", search);
 
       try {
-        const res = await fetch(`/api/mappings?${params}`);
-        const json = await res.json();
+        const res = await fetch(`/api/mappings?${params}`, {
+          signal: controller.signal,
+        });
+        const json = await parseJsonOrThrow<MappingsResponse>(res);
         setData(json.data);
         setPagination(json.pagination);
-      } catch {
+      } catch (err) {
+        if (
+          err instanceof DOMException &&
+          err.name === "AbortError"
+        ) {
+          return;
+        }
         toast("Failed to load mappings", "error");
       }
     },
@@ -54,11 +100,19 @@ export default function Mappings() {
     fetchMappings(1);
   }, [fetchMappings]);
 
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      fetchAbortController.current?.abort();
+    };
+  }, []);
+
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    clearTimeout(searchTimer.current);
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      // fetchMappings will be triggered by the useEffect
+      setSelected(new Set());
+      setSearch(value);
     }, 300);
   };
 
@@ -98,14 +152,14 @@ export default function Mappings() {
         `/api/mappings/${encodeURIComponent(icloudId)}`,
         { method: "DELETE" },
       );
-      const json = await res.json();
+      const json = await parseJsonOrThrow<{ deleted: number }>(res);
       setSelected((prev) => {
         const next = new Set(prev);
         next.delete(icloudId);
         return next;
       });
       toast(`Deleted ${json.deleted} mapping(s)`, "success");
-      fetchMappings(pagination.page);
+      await fetchMappings(pagination.page);
     } catch {
       toast("Delete failed", "error");
     }
@@ -125,10 +179,10 @@ export default function Mappings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ icloudIds: ids }),
       });
-      const json = await res.json();
+      const json = await parseJsonOrThrow<{ deleted: number }>(res);
       setSelected(new Set());
       toast(`Deleted ${json.deleted} mapping(s)`, "success");
-      fetchMappings(pagination.page);
+      await fetchMappings(pagination.page);
     } catch {
       toast("Bulk delete failed", "error");
     }
@@ -152,9 +206,10 @@ export default function Mappings() {
           <input
             type="text"
             placeholder="Filter by ID or checksum..."
-            value={search}
+            value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
             style={{ flex: 1, minWidth: 200 }}
+            aria-label="Search mappings"
           />
           <select
             value={pageSize}
@@ -162,6 +217,7 @@ export default function Mappings() {
               setPageSize(Number(e.target.value));
               setSelected(new Set());
             }}
+            aria-label="Mappings page size"
           >
             <option value={25}>25 per page</option>
             <option value={50}>50 per page</option>
@@ -188,6 +244,7 @@ export default function Mappings() {
                           data.every((m) => selected.has(m.icloudId))
                         }
                         onChange={(e) => toggleAll(e.target.checked)}
+                        aria-label="Select all mappings on this page"
                       />
                     </th>
                     <th>iCloud ID</th>
@@ -199,8 +256,7 @@ export default function Mappings() {
                 </thead>
                 <tbody>
                   {data.map((m) => {
-                    const date = new Date(m.syncedAt);
-                    const dateStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+                    const dateStr = formatDateTime(m.syncedAt);
                     return (
                       <tr key={m.icloudId}>
                         <td style={{ textAlign: "center" }}>
@@ -210,6 +266,7 @@ export default function Mappings() {
                             onChange={(e) =>
                               toggleSelect(m.icloudId, e.target.checked)
                             }
+                            aria-label={`Select mapping ${m.icloudId}`}
                           />
                         </td>
                         <td className="mono" title={m.icloudId}>
@@ -226,6 +283,8 @@ export default function Mappings() {
                           <button
                             className="btn btn-danger btn-sm"
                             onClick={() => deleteSingle(m.icloudId)}
+                            aria-label={`Delete mapping ${m.icloudId}`}
+                            title="Delete mapping"
                           >
                             &times;
                           </button>
