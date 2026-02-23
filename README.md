@@ -158,7 +158,7 @@ npm test           # Run tests in watch mode
 | `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
 | `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
 | `UPLOAD_DELAY_MS`             | Delay between uploads (rate limiting)       | `0` (no delay)               |
-| `HEALTH_PORT`                 | Port for health/metrics/admin HTTP server   | `3000`                       |
+| `SERVER_PORT`                 | Port for health/metrics/admin HTTP server   | `3000`                       |
 | `LOG_LEVEL`                   | Logging level                               | `info`                       |
 | `ALERT_WEBHOOK_URL`           | Webhook URL for alerts (optional)           | (none)                       |
 | `PUSHOVER_TOKEN`              | Pushover app token (optional)               | (none)                       |

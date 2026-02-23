@@ -17,7 +17,7 @@ async function main() {
       cookieRefreshIntervalHours:
         config.cookieRefreshIntervalMs / (60 * 60 * 1000),
       albumName: config.amazonAlbumName,
-      healthPort: config.healthPort,
+      serverPort: config.serverPort,
     },
     "Starting sync service",
   );
@@ -38,7 +38,7 @@ async function main() {
 
   // Start app server (health, API, admin UI)
   const health = new AppServer({
-    port: config.healthPort,
+    port: config.serverPort,
     state,
     cookiesPath: config.amazonCookiesPath,
     onAmazonAuthChecked: (authenticated) => {
