@@ -520,6 +520,95 @@ textarea.cookie-paste {
   resize: vertical;
 }
 
+/* Mappings page */
+.mappings-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.mappings-subtitle {
+  margin-top: -0.25rem;
+  color: #666;
+  font-size: 0.92rem;
+}
+
+.mappings-toolbar {
+  padding: 0.65rem;
+  border: 1px solid #e6e9ef;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.mappings-search {
+  flex: 1;
+  min-width: 240px;
+}
+
+.mappings-table-wrap {
+  border: 1px solid #e8ebf0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.mappings-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.mappings-select-col {
+  width: 32px;
+  text-align: center;
+}
+
+.mappings-actions-col {
+  width: 60px;
+  text-align: center;
+}
+
+.mappings-delete-btn {
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.mappings-delete-btn:hover {
+  transform: translateY(-1px);
+}
+
+.mappings-delete-btn:active {
+  transform: translateY(0);
+}
+
+.mappings-page-label {
+  font-size: 0.85rem;
+  padding: 0 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mappings-subtitle {
+    color: #aaa;
+  }
+
+  .mappings-toolbar {
+    border-color: #3a3a3a;
+    background: #2c2f36;
+  }
+
+  .mappings-table-wrap {
+    border-color: #3a3a3a;
+    background: #2a2a2a;
+  }
+}
+
 /* Home page */
 .home-card {
   display: grid;

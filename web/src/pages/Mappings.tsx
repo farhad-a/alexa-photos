@@ -184,19 +184,23 @@ export default function Mappings() {
   );
 
   return (
-    <div className="card">
+    <div className="card mappings-card">
       <div className="page-header">
         <h2>Photo Mappings</h2>
         <span className="badge">{pagination.totalItems} total</span>
       </div>
 
-      <div className="toolbar">
+      <p className="mappings-subtitle">
+        Manage iCloud ↔ Amazon photo links. Deleting a mapping forces that photo to resync on the next cycle.
+      </p>
+
+      <div className="mappings-toolbar toolbar">
         <input
           type="text"
           placeholder="Filter by ID or checksum..."
           value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
-          style={{ flex: 1, minWidth: 200 }}
+          className="mappings-search"
           aria-label="Search mappings"
         />
         <select
@@ -231,11 +235,11 @@ export default function Mappings() {
       {!loading && !loadError &&
         (data.length > 0 ? (
           <>
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap mappings-table-wrap">
+              <table className="mappings-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 32, textAlign: "center" }}>
+                    <th className="mappings-select-col">
                       <input
                         type="checkbox"
                         checked={
@@ -250,7 +254,7 @@ export default function Mappings() {
                     <th>Checksum</th>
                     <th>Amazon ID</th>
                     <th>Synced At</th>
-                    <th style={{ width: 60, textAlign: "center" }} />
+                    <th className="mappings-actions-col" />
                   </tr>
                 </thead>
                 <tbody>
@@ -258,7 +262,7 @@ export default function Mappings() {
                     const dateStr = formatDateTime(m.syncedAt);
                     return (
                       <tr key={m.icloudId}>
-                        <td style={{ textAlign: "center" }}>
+                        <td className="mappings-select-col">
                           <input
                             type="checkbox"
                             checked={selected.has(m.icloudId)}
@@ -278,14 +282,14 @@ export default function Mappings() {
                           {m.amazonId}
                         </td>
                         <td>{dateStr}</td>
-                        <td style={{ textAlign: "center" }}>
+                        <td className="mappings-actions-col">
                           <button
-                            className="btn btn-danger btn-sm"
+                            className="btn btn-danger btn-sm mappings-delete-btn"
                             onClick={() => deleteSingle(m.icloudId)}
                             aria-label={`Delete mapping ${m.icloudId}`}
                             title="Delete mapping"
                           >
-                            &times;
+                            <span aria-hidden="true">×</span>
                           </button>
                         </td>
                       </tr>
@@ -309,7 +313,7 @@ export default function Mappings() {
                 >
                   &laquo; Prev
                 </button>
-                <span style={{ fontSize: "0.85rem", padding: "0 0.5rem" }}>
+                <span className="mappings-page-label">
                   {pagination.totalPages > 0
                     ? `Page ${pagination.page} of ${pagination.totalPages}`
                     : ""}
