@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getJson } from "../lib/api";
 
 interface LastSync {
   timestamp: string;
@@ -37,9 +38,7 @@ export default function Home() {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const res = await fetch("/metrics");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: Metrics = await res.json();
+      const json = await getJson<Metrics>("/metrics");
       setMetrics(json);
       setError(null);
     } catch (err) {
@@ -51,7 +50,11 @@ export default function Home() {
 
   useEffect(() => {
     fetchMetrics();
-    const id = setInterval(fetchMetrics, 15000);
+
+    const id = setInterval(() => {
+      if (!document.hidden) void fetchMetrics();
+    }, 15000);
+
     return () => clearInterval(id);
   }, [fetchMetrics]);
 
@@ -78,8 +81,10 @@ export default function Home() {
             {loading ? "Loading..." : metrics?.status ?? "unknown"}
           </div>
         </div>
-        <div className="home-hero-meta">
-          <span className={`status-dot ${metrics?.amazonAuthenticated ? "ok" : "error"}`} />
+        <div className="home-hero-meta" role="status" aria-live="polite">
+          <span
+            className={`status-dot ${metrics?.amazonAuthenticated ? "ok" : "error"}`}
+          />
           Amazon auth {metrics?.amazonAuthenticated ? "connected" : "disconnected"}
         </div>
       </div>

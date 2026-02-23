@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import Toast, { toast } from "../components/Toast";
+import { useToast } from "../components/Toast";
+import { deleteJson, getJson, postJson } from "../lib/api";
 
 interface Mapping {
   icloudId: string;
@@ -33,22 +34,11 @@ function formatDateTime(value: string): string {
   });
 }
 
-async function parseJsonOrThrow<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    try {
-      const err = (await res.json()) as { error?: string };
-      if (err.error) message = err.error;
-    } catch {
-      // ignore JSON parse failures for error bodies
-    }
-    throw new Error(message);
-  }
-  return (await res.json()) as T;
-}
-
 export default function Mappings() {
+  const { showToast } = useToast();
   const [data, setData] = useState<Mapping[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     pageSize: 50,
@@ -77,27 +67,28 @@ export default function Mappings() {
       if (search) params.set("search", search);
 
       try {
-        const res = await fetch(`/api/mappings?${params}`, {
+        const json = await getJson<MappingsResponse>(`/api/mappings?${params}`, {
           signal: controller.signal,
         });
-        const json = await parseJsonOrThrow<MappingsResponse>(res);
         setData(json.data);
         setPagination(json.pagination);
+        setLoadError(null);
       } catch (err) {
-        if (
-          err instanceof DOMException &&
-          err.name === "AbortError"
-        ) {
+        if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
-        toast("Failed to load mappings", "error");
+        const message = err instanceof Error ? err.message : "Failed to load mappings";
+        setLoadError(message);
+        showToast(message, "error");
+      } finally {
+        setLoading(false);
       }
     },
-    [search, pageSize],
+    [search, pageSize, showToast],
   );
 
   useEffect(() => {
-    fetchMappings(1);
+    void fetchMappings(1);
   }, [fetchMappings]);
 
   useEffect(() => {
@@ -122,7 +113,7 @@ export default function Mappings() {
       Math.min(pagination.totalPages, pagination.page + delta),
     );
     setSelected(new Set());
-    fetchMappings(newPage);
+    void fetchMappings(newPage);
   };
 
   const toggleSelect = (id: string, checked: boolean) => {
@@ -148,20 +139,18 @@ export default function Mappings() {
     )
       return;
     try {
-      const res = await fetch(
+      const json = await deleteJson<{ deleted: number }>(
         `/api/mappings/${encodeURIComponent(icloudId)}`,
-        { method: "DELETE" },
       );
-      const json = await parseJsonOrThrow<{ deleted: number }>(res);
       setSelected((prev) => {
         const next = new Set(prev);
         next.delete(icloudId);
         return next;
       });
-      toast(`Deleted ${json.deleted} mapping(s)`, "success");
+      showToast(`Deleted ${json.deleted} mapping(s)`, "success");
       await fetchMappings(pagination.page);
-    } catch {
-      toast("Delete failed", "error");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
     }
   };
 
@@ -174,17 +163,17 @@ export default function Mappings() {
     )
       return;
     try {
-      const res = await fetch("/api/mappings/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ icloudIds: ids }),
-      });
-      const json = await parseJsonOrThrow<{ deleted: number }>(res);
+      const json = await postJson<{ deleted: number }>(
+        "/api/mappings/bulk-delete",
+        {
+          icloudIds: ids,
+        },
+      );
       setSelected(new Set());
-      toast(`Deleted ${json.deleted} mapping(s)`, "success");
+      showToast(`Deleted ${json.deleted} mapping(s)`, "success");
       await fetchMappings(pagination.page);
-    } catch {
-      toast("Bulk delete failed", "error");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Bulk delete failed", "error");
     }
   };
 
@@ -195,42 +184,52 @@ export default function Mappings() {
   );
 
   return (
-    <>
-      <div className="card">
-        <div className="page-header">
-          <h2>Photo Mappings</h2>
-          <span className="badge">{pagination.totalItems} total</span>
-        </div>
+    <div className="card">
+      <div className="page-header">
+        <h2>Photo Mappings</h2>
+        <span className="badge">{pagination.totalItems} total</span>
+      </div>
 
-        <div className="toolbar">
-          <input
-            type="text"
-            placeholder="Filter by ID or checksum..."
-            value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
-            aria-label="Search mappings"
-          />
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setSelected(new Set());
-            }}
-            aria-label="Mappings page size"
-          >
-            <option value={25}>25 per page</option>
-            <option value={50}>50 per page</option>
-            <option value={100}>100 per page</option>
-          </select>
-          {selected.size > 0 && (
-            <button className="btn btn-danger" onClick={bulkDelete}>
-              Delete Selected ({selected.size})
-            </button>
-          )}
-        </div>
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Filter by ID or checksum..."
+          value={searchInput}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          style={{ flex: 1, minWidth: 200 }}
+          aria-label="Search mappings"
+        />
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setSelected(new Set());
+          }}
+          aria-label="Mappings page size"
+        >
+          <option value={25}>25 per page</option>
+          <option value={50}>50 per page</option>
+          <option value={100}>100 per page</option>
+        </select>
+        {selected.size > 0 && (
+          <button className="btn btn-danger" onClick={bulkDelete}>
+            Delete Selected ({selected.size})
+          </button>
+        )}
+      </div>
 
-        {data.length > 0 ? (
+      {loading && <div className="empty">Loading mappings…</div>}
+      {!loading && loadError && (
+        <div className="inline-error" role="alert">
+          Failed to load mappings: {loadError}
+          <button className="btn btn-sm" onClick={() => void fetchMappings(1)}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !loadError &&
+        (data.length > 0 ? (
           <>
             <div className="table-wrap">
               <table>
@@ -327,9 +326,7 @@ export default function Mappings() {
           </>
         ) : (
           <div className="empty">No photo mappings found.</div>
-        )}
-      </div>
-      <Toast />
-    </>
+        ))}
+    </div>
   );
 }

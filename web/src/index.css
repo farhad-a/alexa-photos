@@ -344,6 +344,36 @@ table tr:hover td {
   }
 }
 
+.inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 6px;
+  background: #f8d7da;
+  color: #721c24;
+  font-size: 0.9rem;
+}
+
+.inline-muted {
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .inline-error {
+    background: #3a1a1a;
+    color: #f5a5a5;
+  }
+
+  .inline-muted {
+    color: #aaa;
+  }
+}
+
 /* Toast */
 .toast {
   position: fixed;
