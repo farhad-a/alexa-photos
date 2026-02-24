@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "fs/promises";
 import { AmazonClient, AmazonCookies } from "./client.js";
 
 // Mock global fetch
@@ -36,11 +37,21 @@ function makeUsCookies(): AmazonCookies {
   };
 }
 
-function makeIntlCookies(tld: string): AmazonCookies {
+function makeIntlCookies(
+  tld: string,
+  options: { includeRefreshCookies?: boolean } = {},
+): AmazonCookies {
   return {
     "session-id": "133-9999999-0000000",
     [`ubid-acb${tld}`]: "131-9999999-0000000",
     [`at-acb${tld}`]: "Atza|intl-token",
+    ...(options.includeRefreshCookies
+      ? {
+          [`sess-at-acb${tld}`]: "sess-intl-token",
+          [`sst-acb${tld}`]: "sst-intl-token",
+          [`x-acb${tld}`]: "x-intl-token",
+        }
+      : {}),
   };
 }
 
@@ -479,6 +490,91 @@ describe("AmazonClient", () => {
       expect(result.ok).toBe(true);
       // Should have been called 3 times: original + refresh + retry
       expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("uses international refresh cookie names when refreshing", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => "Unauthorized",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            response: {
+              tokens: {
+                cookies: [{ Name: "at-acbde", Value: "Atza|intl-new-token" }],
+              },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        });
+
+      const client = new AmazonClient(
+        makeIntlCookies("de", { includeRefreshCookies: true }),
+        {
+          autoRefresh: true,
+          cookiesPath: "/tmp/test-intl-cookies.json",
+        },
+      );
+
+      const result = await client["request"](
+        "GET",
+        "https://www.amazon.de/drive/v1/nodes",
+      );
+
+      expect(result.ok).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      const refreshCall = mockFetch.mock.calls[1];
+      const refreshHeaders = refreshCall[1]?.headers as
+        | Record<string, string>
+        | undefined;
+      expect(refreshCall[0]).toContain(
+        "https://www.amazon.de/ap/exchangetoken/refresh",
+      );
+      expect(refreshHeaders?.Cookie).toContain("sess-at-acbde=sess-intl-token");
+      expect(refreshHeaders?.Cookie).toContain("sst-acbde=sst-intl-token");
+      expect(refreshHeaders?.Cookie).toContain("x-acbde=x-intl-token");
+    });
+
+    it("persists returned auth cookies and updates session-id when rotated", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: {
+            tokens: {
+              cookies: [
+                { Name: "at-main", Value: "Atza|new-token" },
+                { Name: "sess-at-main", Value: "sess-new" },
+                { Name: "sst-main", Value: "sst-new" },
+                { Name: "x-main", Value: "x-new" },
+                { Name: "session-id", Value: "200-rotated" },
+              ],
+            },
+          },
+        }),
+      });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      const ok = await client.refreshNow();
+      expect(ok).toBe(true);
+      expect(client["headers"]["x-amzn-sessionid"]).toBe("200-rotated");
+
+      const writeFileMock = vi.mocked(fs.writeFile);
+      expect(writeFileMock).toHaveBeenCalledWith(
+        "/tmp/test-cookies.json",
+        expect.stringContaining('"session-id": "200-rotated"'),
+        "utf-8",
+      );
     });
 
     it("sends recovery notification after successful token refresh", async () => {

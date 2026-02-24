@@ -54,8 +54,8 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 2. Open DevTools → Application → Cookies → `www.amazon.com`
 3. Run `npm run amazon:setup` and paste the cookie values:
    - **US**: `session-id`, `ubid-main`, `at-main`, `x-main`, `sess-at-main`, `sst-main`
-   - **International**: `session-id`, `ubid-acb{tld}`, `at-acb{tld}`
-4. Cookies are saved to `./data/amazon-cookies.json`
+   - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}` (plus optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}` for best auto-refresh reliability)
+4. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
 
 > **Note:** Cookies expire periodically. Re-run `npm run amazon:setup` when
 > the sync service reports an authentication error.
@@ -154,7 +154,7 @@ npm test           # Run tests in watch mode
 | `AMAZON_COOKIES_PATH`         | Path to cookies JSON file                   | `./data/amazon-cookies.json` |
 | `AMAZON_ALBUM_NAME`           | Album name in Amazon Photos                 | `Echo Show`                  |
 | `AMAZON_AUTO_REFRESH_COOKIES` | Automatically refresh expired auth tokens   | `true`                       |
-| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `23`                      |
+| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `8`                       |
 | `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
 | `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
 | `UPLOAD_DELAY_MS`             | Delay between uploads (rate limiting)       | `0` (no delay)               |
@@ -361,7 +361,7 @@ UPLOAD_DELAY_MS=1000
 
 ### Amazon Cookies Expired
 
-The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-main`, `sst-main`). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `23`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to run `npm run amazon:setup` again to save fresh cookies from your browser.
+The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to run `npm run amazon:setup` again to save fresh cookies from your browser.
 
 To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 
