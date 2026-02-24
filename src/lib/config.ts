@@ -19,7 +19,7 @@ const configSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   cookieRefreshIntervalMs: z.coerce
     .number()
-    .default(23)
+    .default(8)
     .transform((h) => h * 60 * 60 * 1000),
 });
 

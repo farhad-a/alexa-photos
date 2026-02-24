@@ -141,6 +141,22 @@ describe("extractRequiredCookies", () => {
     expect(cookies["other-cookie"]).toBeUndefined();
   });
 
+  it("includes optional international refresh cookies when present", () => {
+    const intl = {
+      "session-id": "123",
+      "ubid-acbde": "456",
+      "at-acbde": "Atza|de-token",
+      "x-acbde": "x-token",
+      "sess-at-acbde": "sess-token",
+      "sst-acbde": "sst-token",
+    };
+    const { cookies, missing } = extractRequiredCookies(intl, "de");
+    expect(missing).toEqual([]);
+    expect(cookies["x-acbde"]).toBe("x-token");
+    expect(cookies["sess-at-acbde"]).toBe("sess-token");
+    expect(cookies["sst-acbde"]).toBe("sst-token");
+  });
+
   it("reports missing international cookies", () => {
     const partial = { "session-id": "123" };
     const { missing } = extractRequiredCookies(partial, "co.uk");
