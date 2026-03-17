@@ -55,6 +55,10 @@ export class AppServer {
       totalSyncs: 0,
       totalErrors: 0,
       amazonAuthenticated: false,
+      amazonAuth401Count: 0,
+      amazonRateLimit429Count: 0,
+      amazonBotDetection503Count: 0,
+      amazonNetworkErrorCount: 0,
     };
 
     this.server = createServer((req, res) => this.handleRequest(req, res));

@@ -74,6 +74,18 @@ vi.mock("../state/store.js", () => ({
 // Mock AmazonClient.fromFile
 vi.mock("../amazon/client.js", () => {
   const mockCheckAuth = vi.fn().mockResolvedValue(true);
+  const mockCheckAuthStatus = vi.fn(async () => {
+    const ok = await mockCheckAuth();
+    if (ok) {
+      return { ok: true, state: "ok", statusCode: 200, retriable: false };
+    }
+    return {
+      ok: false,
+      state: "unauthorized",
+      statusCode: 401,
+      retriable: false,
+    };
+  });
   const mockFindOrCreateAlbum = vi.fn().mockResolvedValue("album-123");
   const mockUploadPhotoToAlbum = vi.fn().mockResolvedValue("amazon-node-id");
   const mockAddToAlbumIfNotPresent = vi
@@ -85,6 +97,7 @@ vi.mock("../amazon/client.js", () => {
 
   const mockClient = {
     checkAuth: mockCheckAuth,
+    checkAuthStatus: mockCheckAuthStatus,
     findOrCreateAlbum: mockFindOrCreateAlbum,
     uploadPhotoToAlbum: mockUploadPhotoToAlbum,
     addToAlbumIfNotPresent: mockAddToAlbumIfNotPresent,

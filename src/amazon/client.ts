@@ -43,6 +43,21 @@ export interface AmazonCookies {
   [key: string]: string;
 }
 
+export type AmazonAuthState =
+  | "ok"
+  | "unauthorized"
+  | "rate_limited"
+  | "bot_detection"
+  | "network"
+  | "unknown";
+
+export interface AmazonAuthStatus {
+  ok: boolean;
+  state: AmazonAuthState;
+  statusCode?: number;
+  retriable: boolean;
+}
+
 export class AmazonClient {
   private cookies: AmazonCookies;
   private tld: string;
@@ -395,25 +410,76 @@ export class AmazonClient {
 
   // ── public API ─────────────────────────────────────────────
 
-  /** Verify that cookies are still valid */
-  async checkAuth(): Promise<boolean> {
+  /** Verify that cookies are still valid and return classified auth status. */
+  async checkAuthStatus(): Promise<AmazonAuthStatus> {
     try {
       const res = await fetch(this.buildUrl(`${this.driveUrl}/account/info`), {
         headers: this.headers,
       });
-      if (res.ok) return true;
+
+      if (res.ok) {
+        return {
+          ok: true,
+          state: "ok",
+          statusCode: res.status,
+          retriable: false,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          ok: false,
+          state: "unauthorized",
+          statusCode: 401,
+          retriable: false,
+        };
+      }
+
+      if (res.status === 429) {
+        logger.warn(
+          "Got 429 from Amazon (rate-limited). Backing off and retrying later.",
+        );
+        return {
+          ok: false,
+          state: "rate_limited",
+          statusCode: 429,
+          retriable: true,
+        };
+      }
+
       if (res.status === 503) {
         logger.warn(
-          "Got 503 from Amazon (bot detection). " +
-            "This may happen from cloud/datacenter IPs. " +
-            "The service should work from a residential network.",
+          "Got 503 from Amazon (possible bot detection/risk). " +
+            "This may happen from cloud/datacenter IPs.",
         );
+        return {
+          ok: false,
+          state: "bot_detection",
+          statusCode: 503,
+          retriable: true,
+        };
       }
-      return false;
+
+      return {
+        ok: false,
+        state: "unknown",
+        statusCode: res.status,
+        retriable: res.status >= 500,
+      };
     } catch (error) {
       logger.warn({ error }, "Auth check failed (network error)");
-      return false;
+      return {
+        ok: false,
+        state: "network",
+        retriable: true,
+      };
     }
+  }
+
+  /** Verify that cookies are still valid */
+  async checkAuth(): Promise<boolean> {
+    const status = await this.checkAuthStatus();
+    return status.ok;
   }
 
   /** Get root node of Amazon Drive */

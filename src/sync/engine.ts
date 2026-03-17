@@ -1,5 +1,5 @@
 import { ICloudClient, ICloudPhoto } from "../icloud/client.js";
-import { AmazonClient } from "../amazon/client.js";
+import { AmazonAuthStatus, AmazonClient } from "../amazon/client.js";
 import { StateStore, PhotoMapping } from "../state/store.js";
 import { config } from "../lib/config.js";
 import { logger as rootLogger } from "../lib/logger.js";
@@ -19,6 +19,12 @@ export interface SyncMetrics {
   totalSyncs: number;
   totalErrors: number;
   amazonAuthenticated: boolean;
+  amazonAuthStatus?: AmazonAuthStatus["state"];
+  amazonAuthLastStatusCode?: number;
+  amazonAuth401Count: number;
+  amazonRateLimit429Count: number;
+  amazonBotDetection503Count: number;
+  amazonNetworkErrorCount: number;
   nextSync?: Date;
 }
 
@@ -29,10 +35,17 @@ export class SyncEngine {
   private isRunning = false;
   private albumId: string | null = null;
   private notifications: NotificationService;
+  private lastAuthStatus: AmazonAuthStatus | null = null;
+  private unauthorizedStreak = 0;
+  private transientAuthFailureStreak = 0;
   private metrics: SyncMetrics = {
     totalSyncs: 0,
     totalErrors: 0,
     amazonAuthenticated: false,
+    amazonAuth401Count: 0,
+    amazonRateLimit429Count: 0,
+    amazonBotDetection503Count: 0,
+    amazonNetworkErrorCount: 0,
   };
 
   constructor(icloud: ICloudClient, state: StateStore, amazon?: AmazonClient) {
@@ -94,9 +107,7 @@ export class SyncEngine {
         toAdd.length > 0 || (toRemove.length > 0 && config.syncDeletions);
       if (needsAmazon) {
         if (!authOk) {
-          throw new Error(
-            "Amazon Photos authentication failed — run `npm run amazon:setup` to update cookies",
-          );
+          throw new Error(this.buildAuthFailureMessage());
         }
         await this.ensureAmazonClient();
       }
@@ -193,18 +204,95 @@ export class SyncEngine {
         );
       }
 
-      const ok = await this.amazon.checkAuth();
-      this.metrics.amazonAuthenticated = ok;
-      if (!ok) {
-        this.albumId = null;
+      const auth = await this.amazon.checkAuthStatus();
+      this.lastAuthStatus = auth;
+      this.metrics.amazonAuthenticated = auth.ok;
+      this.metrics.amazonAuthStatus = auth.state;
+      this.metrics.amazonAuthLastStatusCode = auth.statusCode;
+
+      if (auth.ok) {
+        this.unauthorizedStreak = 0;
+        this.transientAuthFailureStreak = 0;
+        return true;
       }
-      return ok;
+
+      this.albumId = null;
+
+      if (auth.state === "unauthorized") {
+        this.metrics.amazonAuth401Count += 1;
+        this.unauthorizedStreak += 1;
+        this.transientAuthFailureStreak = 0;
+
+        if (this.unauthorizedStreak === 2) {
+          await this.notifications.sendAlert(
+            "Amazon auth failed with 401 on consecutive checks. Update cookies in the Alexa Photos web UI (Cookies tab).",
+            "error",
+          );
+        }
+      } else {
+        this.unauthorizedStreak = 0;
+
+        if (auth.state === "rate_limited") {
+          this.metrics.amazonRateLimit429Count += 1;
+        } else if (auth.state === "bot_detection") {
+          this.metrics.amazonBotDetection503Count += 1;
+        } else if (auth.state === "network") {
+          this.metrics.amazonNetworkErrorCount += 1;
+        }
+
+        if (auth.retriable) {
+          this.transientAuthFailureStreak += 1;
+          if (this.transientAuthFailureStreak === 3) {
+            await this.notifications.sendAlert(
+              "Amazon auth checks are failing with transient errors (e.g. 429/503/network). Possible bot/risk detection or connectivity issue; backing off and retrying.",
+              "warning",
+            );
+          }
+        } else {
+          this.transientAuthFailureStreak = 0;
+        }
+      }
+
+      return false;
     } catch (error) {
       logger.warn({ error }, "Failed to refresh Amazon auth status");
+      this.lastAuthStatus = {
+        ok: false,
+        state: "network",
+        retriable: true,
+      };
       this.metrics.amazonAuthenticated = false;
+      this.metrics.amazonAuthStatus = "network";
+      this.metrics.amazonNetworkErrorCount += 1;
+      this.metrics.amazonAuthLastStatusCode = undefined;
       this.albumId = null;
+      this.unauthorizedStreak = 0;
+      this.transientAuthFailureStreak += 1;
       return false;
     }
+  }
+
+  private buildAuthFailureMessage(): string {
+    const auth = this.lastAuthStatus;
+
+    if (!auth || auth.state === "unauthorized") {
+      return "Amazon Photos authentication failed (401 unauthorized) — update cookies in the Alexa Photos web UI (Cookies tab).";
+    }
+
+    if (auth.state === "bot_detection") {
+      return "Amazon Photos authentication check failed (503 possible bot/risk detection) — keeping cookies as-is and retrying later.";
+    }
+
+    if (auth.state === "rate_limited") {
+      return "Amazon Photos authentication check failed (429 rate-limited) — backing off and retrying later.";
+    }
+
+    if (auth.state === "network") {
+      return "Amazon Photos authentication check failed (network error) — retrying later.";
+    }
+
+    const suffix = auth.statusCode ? ` (status ${auth.statusCode})` : "";
+    return `Amazon Photos authentication failed${suffix} — retrying later.`;
   }
 
   private async ensureAmazonClient(): Promise<void> {
@@ -220,11 +308,9 @@ export class SyncEngine {
 
     // 2. Verify auth (once per authentication state reset)
     if (!this.metrics.amazonAuthenticated) {
-      const ok = await this.amazon.checkAuth();
+      const ok = await this.refreshAmazonAuthStatus();
       if (!ok) {
-        throw new Error(
-          "Amazon Photos authentication failed — run `npm run amazon:setup` to update cookies",
-        );
+        throw new Error(this.buildAuthFailureMessage());
       }
       logger.debug("Amazon Photos client authenticated");
       this.metrics.amazonAuthenticated = true;
