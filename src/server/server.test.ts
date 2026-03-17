@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AppServer } from "./index.js";
 import { StateStore } from "../state/store.js";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 
 // Mock the logger
 const mockLogger = vi.hoisted(() => {
@@ -33,6 +36,48 @@ const TEST_PORT = 19876;
 function url(path: string): string {
   return `http://localhost:${TEST_PORT}${path}`;
 }
+
+describe("static file serving", () => {
+  let server: AppServer;
+  let staticDir: string;
+
+  beforeEach(async () => {
+    staticDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "alexa-photos-static-"),
+    );
+    await fs.writeFile(path.join(staticDir, "index.html"), "<html>spa</html>");
+    await fs.mkdir(path.join(staticDir, "assets"));
+    await fs.writeFile(
+      path.join(staticDir, "assets", "app.js"),
+      "console.log('ok');",
+    );
+
+    server = new AppServer({ port: TEST_PORT, staticDir });
+    await server.start();
+  });
+
+  afterEach(async () => {
+    await server.stop();
+    await fs.rm(staticDir, { recursive: true, force: true });
+  });
+
+  it("serves existing asset files", async () => {
+    const res = await fetch(url("/assets/app.js"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/javascript");
+  });
+
+  it("returns 404 for missing asset files instead of SPA fallback", async () => {
+    const res = await fetch(url("/assets/missing.js"));
+    expect(res.status).toBe(404);
+  });
+
+  it("does not serve dotfiles", async () => {
+    await fs.writeFile(path.join(staticDir, ".env"), "SECRET=1");
+    const res = await fetch(url("/.env"));
+    expect(res.status).toBe(404);
+  });
+});
 
 describe("AppServer", () => {
   describe("without state store", () => {

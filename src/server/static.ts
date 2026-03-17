@@ -33,8 +33,18 @@ export async function serveStaticFile(
   )
     return false;
 
-  // Prevent path traversal
-  const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
+  // Prevent path traversal and force a relative path under baseDir
+  const safePath = path
+    .normalize(urlPath)
+    .replace(/^(\.\.(?:[/\\]|$))+/, "")
+    .replace(/^[/\\]+/, "");
+  const pathSegments = safePath.split(/[/\\]/).filter(Boolean);
+  const hasDotfileSegment = pathSegments.some((segment) =>
+    segment.startsWith("."),
+  );
+
+  // Never serve dotfiles (or paths that include dotfile segments)
+  if (hasDotfileSegment) return false;
 
   const filePath = path.join(baseDir, safePath);
 
@@ -43,7 +53,10 @@ export async function serveStaticFile(
     return await sendFile(filePath, res);
   }
 
-  // For directory or unknown paths, serve index.html (SPA fallback)
+  // For route-like unknown paths, serve index.html (SPA fallback)
+  const isRoutePath = safePath === "" || path.extname(safePath) === "";
+  if (!isRoutePath) return false;
+
   const indexPath = path.join(baseDir, "index.html");
   if (await fileExists(indexPath)) {
     return await sendFile(indexPath, res);
