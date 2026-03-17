@@ -336,9 +336,14 @@ export class AmazonClient {
             "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
             "error",
           );
-        } else {
+        } else if (authStatus?.ok) {
           await this.notificationCallback?.(
             "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+            "warning",
+          );
+        } else {
+          await this.notificationCallback?.(
+            "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
             "warning",
           );
         }
