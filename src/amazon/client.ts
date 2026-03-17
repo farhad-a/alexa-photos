@@ -314,7 +314,7 @@ export class AmazonClient {
           "Token refresh failed — manual re-authentication required",
         );
         await this.notificationCallback?.(
-          "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+          "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
           "error",
         );
         return false;
@@ -377,7 +377,7 @@ export class AmazonClient {
 
       // Clear notification throttle so future failures trigger new alerts
       this.notificationService?.clearAlertThrottle(
-        "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+        "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
         "error",
       );
 
