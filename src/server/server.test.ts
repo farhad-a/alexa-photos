@@ -72,6 +72,12 @@ describe("static file serving", () => {
     expect(res.status).toBe(404);
   });
 
+  it("falls back to index.html for SPA routes", async () => {
+    const res = await fetch(url("/mappings"));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<html>spa</html>");
+  });
+
   it("does not serve dotfiles", async () => {
     await fs.writeFile(path.join(staticDir, ".env"), "SECRET=1");
     const res = await fetch(url("/.env"));
