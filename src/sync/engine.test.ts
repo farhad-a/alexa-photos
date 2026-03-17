@@ -93,6 +93,7 @@ vi.mock("../amazon/client.js", () => {
     .mockResolvedValue({ added: 1, skipped: 0 });
   const mockRemoveFromAlbum = vi.fn().mockResolvedValue(undefined);
   const mockDeleteNodes = vi.fn().mockResolvedValue(undefined);
+  const mockRefreshNow = vi.fn().mockResolvedValue(true);
   const mockClose = vi.fn().mockResolvedValue(undefined);
 
   const mockClient = {
@@ -103,6 +104,7 @@ vi.mock("../amazon/client.js", () => {
     addToAlbumIfNotPresent: mockAddToAlbumIfNotPresent,
     removeFromAlbum: mockRemoveFromAlbum,
     deleteNodes: mockDeleteNodes,
+    refreshNow: mockRefreshNow,
     close: mockClose,
   };
 
@@ -511,6 +513,7 @@ describe("SyncEngine", () => {
     it("throws if Amazon auth fails", async () => {
       const mock = getAmazonMock();
       mock.checkAuth.mockResolvedValueOnce(false);
+      mock.refreshNow.mockResolvedValueOnce(false);
 
       const photo = makePhoto("p1");
       vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
@@ -518,6 +521,32 @@ describe("SyncEngine", () => {
       await expect(engine.run()).rejects.toThrow(
         "Amazon Photos authentication failed",
       );
+    });
+
+    it("attempts refreshNow on 401 preflight and recovers", async () => {
+      const mock = getAmazonMock();
+      mock.checkAuthStatus
+        .mockResolvedValueOnce({
+          ok: false,
+          state: "unauthorized",
+          statusCode: 401,
+          retriable: false,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          state: "ok",
+          statusCode: 200,
+          retriable: false,
+        });
+      mock.refreshNow.mockResolvedValueOnce(true);
+
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      await engine.run();
+
+      expect(mock.refreshNow).toHaveBeenCalledTimes(1);
+      expect(mock.checkAuthStatus).toHaveBeenCalledTimes(2);
     });
   });
 

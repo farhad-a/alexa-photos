@@ -204,7 +204,20 @@ export class SyncEngine {
         );
       }
 
-      const auth = await this.amazon.checkAuthStatus();
+      let auth = await this.amazon.checkAuthStatus();
+
+      // Preflight 401s can be transient and recover after token exchange.
+      // Try one immediate refresh before classifying as hard unauthorized.
+      if (auth.state === "unauthorized") {
+        logger.info(
+          "Auth check returned 401; attempting immediate cookie refresh",
+        );
+        const refreshed = await this.amazon.refreshNow();
+        if (refreshed) {
+          auth = await this.amazon.checkAuthStatus();
+        }
+      }
+
       this.lastAuthStatus = auth;
       this.metrics.amazonAuthenticated = auth.ok;
       this.metrics.amazonAuthStatus = auth.state;
