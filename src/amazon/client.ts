@@ -275,7 +275,9 @@ export class AmazonClient {
    * Attempt to refresh the authentication token using session cookies.
    * Returns true if refresh was successful, false otherwise.
    */
-  private async refreshCookies(): Promise<boolean> {
+  private async refreshCookies(options?: {
+    notifyOnNonAuthFailure?: boolean;
+  }): Promise<boolean> {
     try {
       // Check if we have the necessary session tokens (US and international variants)
       const sessAtKey = this.findCookieKey("sess-at");
@@ -336,16 +338,18 @@ export class AmazonClient {
             "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
             "error",
           );
-        } else if (authStatus?.ok) {
-          await this.notificationCallback?.(
-            "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
-            "warning",
-          );
-        } else {
-          await this.notificationCallback?.(
-            "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
-            "warning",
-          );
+        } else if (options?.notifyOnNonAuthFailure !== false) {
+          if (authStatus?.ok) {
+            await this.notificationCallback?.(
+              "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+              "warning",
+            );
+          } else {
+            await this.notificationCallback?.(
+              "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
+              "warning",
+            );
+          }
         }
 
         return false;
@@ -797,8 +801,10 @@ export class AmazonClient {
   }
 
   /** Refresh cookies immediately. Returns true if successful. */
-  async refreshNow(): Promise<boolean> {
-    return this.refreshCookies();
+  async refreshNow(options?: {
+    notifyOnNonAuthFailure?: boolean;
+  }): Promise<boolean> {
+    return this.refreshCookies(options);
   }
 
   /** Start a proactive cookie refresh interval. Calls onRefreshFailed if the refresh returns false. */
