@@ -658,6 +658,41 @@ describe("AmazonClient", () => {
       );
     });
 
+    it("suppresses non-auth warnings when notifyOnNonAuthFailure is false", async () => {
+      // Refresh attempt fails
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "Service Unavailable",
+      });
+
+      // Follow-up auth check succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ account: "ok" }),
+      });
+
+      const notificationCallback = vi.fn();
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+        notificationCallback,
+      });
+
+      const ok = await client.refreshNow({ notifyOnNonAuthFailure: false });
+      expect(ok).toBe(false);
+
+      expect(notificationCallback).not.toHaveBeenCalledWith(
+        "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+        "warning",
+      );
+      expect(notificationCallback).not.toHaveBeenCalledWith(
+        "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
+        "warning",
+      );
+    });
+
     it("sends inconclusive warning when refresh fails and auth check is not unauthorized but not ok", async () => {
       // Refresh attempt fails
       mockFetch.mockResolvedValueOnce({

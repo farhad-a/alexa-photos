@@ -54,7 +54,9 @@ async function main() {
   // Refresh cookies immediately at startup — manually-provided cookies may be
   // hours old, so we reset the expiry clock before arming the interval.
   // Fall back to checkAuth() if refresh fails (e.g. session token expired).
-  const startupRefreshed = await amazon.refreshNow();
+  const startupRefreshed = await amazon.refreshNow({
+    notifyOnNonAuthFailure: false,
+  });
   const authOk = startupRefreshed || (await amazon.checkAuth());
   sync.setAmazonAuthenticated(authOk);
   health.updateMetrics({
