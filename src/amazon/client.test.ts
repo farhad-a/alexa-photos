@@ -658,6 +658,41 @@ describe("AmazonClient", () => {
       );
     });
 
+    it("sends inconclusive warning when refresh fails and auth check is not unauthorized but not ok", async () => {
+      // Refresh attempt fails
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "Service Unavailable",
+      });
+
+      // Follow-up auth check is inconclusive (network/transient bucket)
+      mockFetch.mockRejectedValueOnce(new Error("network down"));
+
+      const notificationCallback = vi.fn();
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+        notificationCallback,
+      });
+
+      const ok = await client.refreshNow();
+      expect(ok).toBe(false);
+
+      expect(notificationCallback).toHaveBeenCalledWith(
+        "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
+        "warning",
+      );
+      expect(notificationCallback).not.toHaveBeenCalledWith(
+        "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+        "warning",
+      );
+      expect(notificationCallback).not.toHaveBeenCalledWith(
+        "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
+        "error",
+      );
+    });
+
     it("sends manual re-auth error only when refresh fails and auth is unauthorized", async () => {
       // Refresh attempt fails
       mockFetch.mockResolvedValueOnce({
