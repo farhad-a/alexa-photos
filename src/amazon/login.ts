@@ -21,14 +21,26 @@ const COOKIES_PATH =
 
 // US cookies we need (in order of importance)
 const US_REQUIRED = ["session-id", "ubid-main", "at-main"] as const;
-const US_OPTIONAL = ["x-main", "sess-at-main", "sst-main"] as const;
+const US_OPTIONAL = [
+  "x-main",
+  "sess-at-main",
+  "sst-main",
+  "session-token",
+  "session-id-time",
+] as const;
 
 function intlRequired(tld: string): [string, string, string] {
   return ["session-id", `ubid-acb${tld}`, `at-acb${tld}`];
 }
 
-function intlOptional(tld: string): [string, string, string] {
-  return [`x-acb${tld}`, `sess-at-acb${tld}`, `sst-acb${tld}`];
+function intlOptional(tld: string): [string, string, string, string, string] {
+  return [
+    `x-acb${tld}`,
+    `sess-at-acb${tld}`,
+    `sst-acb${tld}`,
+    "session-token",
+    "session-id-time",
+  ];
 }
 
 async function ask(rl: readline.Interface, question: string): Promise<string> {

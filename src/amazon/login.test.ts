@@ -89,17 +89,21 @@ describe("extractRequiredCookies", () => {
     "x-main": "xval",
     "sess-at-main": "sessval",
     "sst-main": "sstval",
+    "session-token": "session-token-val",
+    "session-id-time": "2082787201l",
     "csm-hit": "irrelevant",
     skin: "noskin",
   };
 
-  it("extracts all 6 US cookies from a full cookie map", () => {
+  it("extracts all US auth/refresh cookies from a full cookie map", () => {
     const { cookies, missing } = extractRequiredCookies(fullUsCookies, "com");
     expect(missing).toEqual([]);
-    expect(Object.keys(cookies)).toHaveLength(6);
+    expect(Object.keys(cookies)).toHaveLength(8);
     expect(cookies["session-id"]).toBe("133-123");
     expect(cookies["at-main"]).toBe("Atza|token");
     expect(cookies["sst-main"]).toBe("sstval");
+    expect(cookies["session-token"]).toBe("session-token-val");
+    expect(cookies["session-id-time"]).toBe("2082787201l");
   });
 
   it("excludes non-Amazon cookies", () => {
@@ -149,12 +153,16 @@ describe("extractRequiredCookies", () => {
       "x-acbde": "x-token",
       "sess-at-acbde": "sess-token",
       "sst-acbde": "sst-token",
+      "session-token": "session-token",
+      "session-id-time": "2082787201l",
     };
     const { cookies, missing } = extractRequiredCookies(intl, "de");
     expect(missing).toEqual([]);
     expect(cookies["x-acbde"]).toBe("x-token");
     expect(cookies["sess-at-acbde"]).toBe("sess-token");
     expect(cookies["sst-acbde"]).toBe("sst-token");
+    expect(cookies["session-token"]).toBe("session-token");
+    expect(cookies["session-id-time"]).toBe("2082787201l");
   });
 
   it("reports missing international cookies", () => {

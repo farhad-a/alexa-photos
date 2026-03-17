@@ -180,6 +180,8 @@ export class AmazonClient {
 
   private isRefreshAuthCookieName(name: string): boolean {
     if (name === "session-id") return true;
+    if (name === "session-token") return true;
+    if (name === "session-id-time") return true;
 
     return /^(at|sess-at|sst|x|ubid)(-|_)(main|acb.+)$/i.test(name);
   }
@@ -278,11 +280,9 @@ export class AmazonClient {
       // Check if we have the necessary session tokens (US and international variants)
       const sessAtKey = this.findCookieKey("sess-at");
       const sstKey = this.findCookieKey("sst");
-      const xKey = this.findCookieKey("x");
 
       const sessAt = sessAtKey ? this.cookies[sessAtKey] : undefined;
       const sst = sstKey ? this.cookies[sstKey] : undefined;
-      const x = xKey ? this.cookies[xKey] : undefined;
 
       if (!sessAt || !sst || !sessAtKey || !sstKey) {
         logger.warn(
@@ -307,11 +307,9 @@ export class AmazonClient {
         source_token: sessAt,
       });
 
-      const refreshCookieHeader = [
-        `${sessAtKey}=${sessAt}`,
-        `${sstKey}=${sst}`,
-        ...(xKey && x ? [`${xKey}=${x}`] : []),
-      ].join("; ");
+      // Send full known cookie context to maximize refresh reliability.
+      // Amazon appears to rely on more than just sess-at/sst in some sessions.
+      const refreshCookieHeader = this.cookieHeader;
 
       const response = await fetch(exchangeUrl, {
         method: "POST",
