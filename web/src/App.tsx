@@ -12,15 +12,15 @@ export default function App() {
           <NavLink to="/" end>
             Home
           </NavLink>
-          <NavLink to="/mappings">Photo Mappings</NavLink>
           <NavLink to="/cookies">Amazon Cookies</NavLink>
+          <NavLink to="/mappings">Photo Mappings</NavLink>
         </nav>
       </aside>
       <main className="main">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/mappings" element={<Mappings />} />
           <Route path="/cookies" element={<Cookies />} />
+          <Route path="/mappings" element={<Mappings />} />
         </Routes>
       </main>
     </div>
