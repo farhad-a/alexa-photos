@@ -139,6 +139,40 @@ export class AmazonClient {
     return "https://content-eu.drive.amazonaws.com/cdproxy/nodes";
   }
 
+  /**
+   * Build candidate cookie key names for US (-main/_main) and international (-acb{tld}/_acb{tld}) variants.
+   */
+  private cookieKeyCandidates(prefix: string): string[] {
+    const us = [`${prefix}-main`, `${prefix}_main`];
+
+    if (this.tld === "com") {
+      return us;
+    }
+
+    const intl = [`${prefix}-acb${this.tld}`, `${prefix}_acb${this.tld}`];
+    return [...intl, ...us];
+  }
+
+  /**
+   * Find the first present cookie key for a logical auth cookie family.
+   */
+  private findCookieKey(prefix: string): string | null {
+    for (const key of this.cookieKeyCandidates(prefix)) {
+      if (this.cookies[key]) return key;
+    }
+    return null;
+  }
+
+  private isRefreshAuthCookieName(name: string): boolean {
+    if (name === "session-id") return true;
+
+    return /^(at|sess-at|sst|x|ubid)(-|_)(main|acb.+)$/i.test(name);
+  }
+
+  private isAccessTokenCookieName(name: string): boolean {
+    return /^at(-|_)(main|acb.+)$/i.test(name);
+  }
+
   private get cookieHeader(): string {
     return Object.entries(this.cookies)
       .map(([k, v]) => `${k}=${v}`)
@@ -226,19 +260,26 @@ export class AmazonClient {
    */
   private async refreshCookies(): Promise<boolean> {
     try {
-      // Check if we have the necessary session tokens
-      const sessAt = this.cookies["sess-at-main"];
-      const sst = this.cookies["sst-main"];
-      const xMain = this.cookies["x-main"];
+      // Check if we have the necessary session tokens (US and international variants)
+      const sessAtKey = this.findCookieKey("sess-at");
+      const sstKey = this.findCookieKey("sst");
+      const xKey = this.findCookieKey("x");
 
-      if (!sessAt || !sst) {
+      const sessAt = sessAtKey ? this.cookies[sessAtKey] : undefined;
+      const sst = sstKey ? this.cookies[sstKey] : undefined;
+      const x = xKey ? this.cookies[xKey] : undefined;
+
+      if (!sessAt || !sst || !sessAtKey || !sstKey) {
         logger.warn(
-          "Cannot auto-refresh: sess-at-main or sst-main not available",
+          { tld: this.tld },
+          "Cannot auto-refresh: session refresh cookies not available",
         );
         return false;
       }
 
-      logger.debug("Attempting to exchange session token for new at-main");
+      logger.debug(
+        "Attempting to exchange session token for fresh auth cookies",
+      );
 
       // Amazon's token exchange endpoint
       const exchangeUrl = `https://www.amazon.${this.tld}/ap/exchangetoken/refresh`;
@@ -251,11 +292,17 @@ export class AmazonClient {
         source_token: sessAt,
       });
 
+      const refreshCookieHeader = [
+        `${sessAtKey}=${sessAt}`,
+        `${sstKey}=${sst}`,
+        ...(xKey && x ? [`${xKey}=${x}`] : []),
+      ].join("; ");
+
       const response = await fetch(exchangeUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Cookie: `sess-at-main=${sessAt}; sst-main=${sst}${xMain ? `; x-main=${xMain}` : ""}`,
+          Cookie: refreshCookieHeader,
           "User-Agent": this.headers["User-Agent"],
         },
         body: formData.toString(),
@@ -274,44 +321,72 @@ export class AmazonClient {
       }
 
       const data = await response.json();
+      const returnedCookies = data.response?.tokens?.cookies;
 
-      // Extract new at-main token from response
-      if (
-        data.response?.tokens?.cookies &&
-        Array.isArray(data.response.tokens.cookies)
-      ) {
-        for (const cookie of data.response.tokens.cookies) {
-          if (cookie.Name === "at-main" && cookie.Value) {
-            // Update in-memory cookies
-            this.cookies["at-main"] = cookie.Value;
+      if (!Array.isArray(returnedCookies)) {
+        logger.warn("Token refresh response missing cookie array");
+        return false;
+      }
 
-            // Persist to disk
-            await fs.writeFile(
-              this.cookiesPath,
-              JSON.stringify(this.cookies, null, 2),
-              "utf-8",
-            );
+      let updatedCookies = 0;
+      let updatedAccessToken = false;
 
-            logger.info("Successfully refreshed at-main token");
+      for (const cookie of returnedCookies) {
+        const name = cookie?.Name;
+        const value = cookie?.Value;
 
-            // Clear notification throttle so future failures trigger new alerts
-            this.notificationService?.clearAlertThrottle(
-              "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
-              "error",
-            );
+        if (typeof name !== "string" || typeof value !== "string" || !value) {
+          continue;
+        }
 
-            await this.notificationCallback?.(
-              "Amazon Photos cookies refreshed successfully",
-              "info",
-            );
+        if (!this.isRefreshAuthCookieName(name)) {
+          continue;
+        }
 
-            return true;
-          }
+        this.cookies[name] = value;
+        updatedCookies += 1;
+
+        if (this.isAccessTokenCookieName(name)) {
+          updatedAccessToken = true;
         }
       }
 
-      logger.warn("Token refresh response missing at-main cookie");
-      return false;
+      if (!updatedAccessToken) {
+        logger.warn("Token refresh response missing access-token cookie");
+        return false;
+      }
+
+      // Keep request header session id aligned if Amazon rotated it.
+      const nextSessionId = this.cookies["session-id"];
+      if (nextSessionId && nextSessionId !== this.sessionId) {
+        logger.info("Amazon session-id rotated during cookie refresh");
+        this.sessionId = nextSessionId;
+      }
+
+      // Persist all refreshed auth cookies
+      await fs.writeFile(
+        this.cookiesPath,
+        JSON.stringify(this.cookies, null, 2),
+        "utf-8",
+      );
+
+      logger.info(
+        { updatedCookies },
+        "Successfully refreshed Amazon auth cookies",
+      );
+
+      // Clear notification throttle so future failures trigger new alerts
+      this.notificationService?.clearAlertThrottle(
+        "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+        "error",
+      );
+
+      await this.notificationCallback?.(
+        "Amazon Photos cookies refreshed successfully",
+        "info",
+      );
+
+      return true;
     } catch (error) {
       logger.error({ error }, "Cookie refresh failed");
       return false;

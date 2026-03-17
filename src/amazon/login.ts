@@ -6,20 +6,30 @@
  *   1. Paste full cookie string from browser DevTools (fast)
  *   2. Enter individual cookie values one by one (guided)
  *
- * Saves cookies to ./data/amazon-cookies.json for the sync service.
+ * Saves cookies to AMAZON_COOKIES_PATH (or ./data/amazon-cookies.json by default)
+ * for the sync service.
  */
 
 import "dotenv/config";
 import * as fs from "fs/promises";
+import path from "path";
 import * as readline from "readline/promises";
 import { AmazonClient, AmazonCookies } from "./client.js";
 
-const COOKIES_PATH = "./data/amazon-cookies.json";
+const COOKIES_PATH =
+  process.env.AMAZON_COOKIES_PATH || "./data/amazon-cookies.json";
 
 // US cookies we need (in order of importance)
 const US_REQUIRED = ["session-id", "ubid-main", "at-main"] as const;
 const US_OPTIONAL = ["x-main", "sess-at-main", "sst-main"] as const;
-const US_ALL = [...US_REQUIRED, ...US_OPTIONAL];
+
+function intlRequired(tld: string): [string, string, string] {
+  return ["session-id", `ubid-acb${tld}`, `at-acb${tld}`];
+}
+
+function intlOptional(tld: string): [string, string, string] {
+  return [`x-acb${tld}`, `sess-at-acb${tld}`, `sst-acb${tld}`];
+}
 
 async function ask(rl: readline.Interface, question: string): Promise<string> {
   const answer = await rl.question(question);
@@ -64,8 +74,11 @@ export function extractRequiredCookies(
   all: Record<string, string>,
   tld: string,
 ): { cookies: Record<string, string>; missing: string[] } {
-  const needed =
-    tld === "com" ? US_ALL : ["session-id", `ubid-acb${tld}`, `at-acb${tld}`];
+  const required: string[] =
+    tld === "com" ? [...US_REQUIRED] : intlRequired(tld);
+  const optional: string[] =
+    tld === "com" ? [...US_OPTIONAL] : intlOptional(tld);
+  const needed = [...required, ...optional];
 
   const cookies: Record<string, string> = {};
   const missing: string[] = [];
@@ -73,19 +86,8 @@ export function extractRequiredCookies(
   for (const key of needed) {
     if (all[key]) {
       cookies[key] = all[key];
-    } else if (
-      US_REQUIRED.includes(key as (typeof US_REQUIRED)[number]) ||
-      !tld.startsWith("com")
-    ) {
-      // Only flag truly required keys as missing
+    } else if (required.includes(key)) {
       missing.push(key);
-    }
-  }
-
-  // Also grab optional US cookies if present (don't flag as missing)
-  if (tld === "com") {
-    for (const key of US_OPTIONAL) {
-      if (all[key] && !cookies[key]) cookies[key] = all[key];
     }
   }
 
@@ -161,10 +163,17 @@ async function manualMode(
     const tld = await ask(rl, "TLD (e.g. ca, co.uk, de, fr, it, es): ");
     const ubid = await ask(rl, `ubid-acb${tld}: `);
     const at = await ask(rl, `at-acb${tld}: `);
+    const x = await ask(rl, `x-acb${tld} (optional): `);
+    const sessAt = await ask(rl, `sess-at-acb${tld} (optional): `);
+    const sst = await ask(rl, `sst-acb${tld} (optional): `);
+
     return {
       "session-id": sessionId,
       [`ubid-acb${tld}`]: ubid,
       [`at-acb${tld}`]: at,
+      ...(x ? { [`x-acb${tld}`]: x } : {}),
+      ...(sessAt ? { [`sess-at-acb${tld}`]: sessAt } : {}),
+      ...(sst ? { [`sst-acb${tld}`]: sst } : {}),
     };
   }
 
@@ -207,7 +216,7 @@ async function main() {
       : await pasteMode(rl);
 
     // Save to disk
-    await fs.mkdir("./data", { recursive: true });
+    await fs.mkdir(path.dirname(COOKIES_PATH), { recursive: true });
     await fs.writeFile(COOKIES_PATH, JSON.stringify(cookies, null, 2) + "\n");
     console.log(`\n✓ Cookies saved to ${COOKIES_PATH}`);
 

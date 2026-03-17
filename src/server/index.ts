@@ -173,8 +173,9 @@ export class AppServer {
 
     const totalItems = this.state!.getCount(search);
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const effectivePage = Math.min(page, totalPages);
     const data = this.state!.getMappingsPaginated({
-      page,
+      page: effectivePage,
       pageSize,
       search,
       sortBy,
@@ -185,7 +186,12 @@ export class AppServer {
     res.end(
       JSON.stringify({
         data,
-        pagination: { page, pageSize, totalItems, totalPages },
+        pagination: {
+          page: effectivePage,
+          pageSize,
+          totalItems,
+          totalPages,
+        },
       }),
     );
   }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import Toast, { toast } from "../components/Toast";
+import { useToast } from "../components/Toast";
+import { deleteJson, getJson, postJson } from "../lib/api";
 
 interface Mapping {
   icloudId: string;
@@ -15,21 +16,48 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+interface MappingsResponse {
+  data: Mapping[];
+  pagination: PaginationInfo;
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function Mappings() {
+  const { showToast } = useToast();
   const [data, setData] = useState<Mapping[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     pageSize: 50,
     totalItems: 0,
     totalPages: 1,
   });
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(50);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAbortController = useRef<AbortController | null>(null);
 
   const fetchMappings = useCallback(
     async (page?: number) => {
+      fetchAbortController.current?.abort();
+      const controller = new AbortController();
+      fetchAbortController.current = controller;
+
       const params = new URLSearchParams({
         page: String(page ?? 1),
         pageSize: String(pageSize),
@@ -39,26 +67,43 @@ export default function Mappings() {
       if (search) params.set("search", search);
 
       try {
-        const res = await fetch(`/api/mappings?${params}`);
-        const json = await res.json();
+        const json = await getJson<MappingsResponse>(`/api/mappings?${params}`, {
+          signal: controller.signal,
+        });
         setData(json.data);
         setPagination(json.pagination);
-      } catch {
-        toast("Failed to load mappings", "error");
+        setLoadError(null);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        const message = err instanceof Error ? err.message : "Failed to load mappings";
+        setLoadError(message);
+        showToast(message, "error");
+      } finally {
+        setLoading(false);
       }
     },
-    [search, pageSize],
+    [search, pageSize, showToast],
   );
 
   useEffect(() => {
-    fetchMappings(1);
+    void fetchMappings(1);
   }, [fetchMappings]);
 
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      fetchAbortController.current?.abort();
+    };
+  }, []);
+
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    clearTimeout(searchTimer.current);
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      // fetchMappings will be triggered by the useEffect
+      setSelected(new Set());
+      setSearch(value);
     }, 300);
   };
 
@@ -68,7 +113,7 @@ export default function Mappings() {
       Math.min(pagination.totalPages, pagination.page + delta),
     );
     setSelected(new Set());
-    fetchMappings(newPage);
+    void fetchMappings(newPage);
   };
 
   const toggleSelect = (id: string, checked: boolean) => {
@@ -94,20 +139,18 @@ export default function Mappings() {
     )
       return;
     try {
-      const res = await fetch(
+      const json = await deleteJson<{ deleted: number }>(
         `/api/mappings/${encodeURIComponent(icloudId)}`,
-        { method: "DELETE" },
       );
-      const json = await res.json();
       setSelected((prev) => {
         const next = new Set(prev);
         next.delete(icloudId);
         return next;
       });
-      toast(`Deleted ${json.deleted} mapping(s)`, "success");
-      fetchMappings(pagination.page);
-    } catch {
-      toast("Delete failed", "error");
+      showToast(`Deleted ${json.deleted} mapping(s)`, "success");
+      await fetchMappings(pagination.page);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
     }
   };
 
@@ -120,17 +163,17 @@ export default function Mappings() {
     )
       return;
     try {
-      const res = await fetch("/api/mappings/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ icloudIds: ids }),
-      });
-      const json = await res.json();
+      const json = await postJson<{ deleted: number }>(
+        "/api/mappings/bulk-delete",
+        {
+          icloudIds: ids,
+        },
+      );
       setSelected(new Set());
-      toast(`Deleted ${json.deleted} mapping(s)`, "success");
-      fetchMappings(pagination.page);
-    } catch {
-      toast("Bulk delete failed", "error");
+      showToast(`Deleted ${json.deleted} mapping(s)`, "success");
+      await fetchMappings(pagination.page);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Bulk delete failed", "error");
     }
   };
 
@@ -141,46 +184,62 @@ export default function Mappings() {
   );
 
   return (
-    <>
-      <div className="card">
-        <div className="page-header">
-          <h2>Photo Mappings</h2>
-          <span className="badge">{pagination.totalItems} total</span>
-        </div>
+    <div className="card mappings-card">
+      <div className="page-header">
+        <h2>Photo Mappings</h2>
+        <span className="badge">{pagination.totalItems} total</span>
+      </div>
 
-        <div className="toolbar">
-          <input
-            type="text"
-            placeholder="Filter by ID or checksum..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
-          />
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setSelected(new Set());
-            }}
-          >
-            <option value={25}>25 per page</option>
-            <option value={50}>50 per page</option>
-            <option value={100}>100 per page</option>
-          </select>
-          {selected.size > 0 && (
-            <button className="btn btn-danger" onClick={bulkDelete}>
-              Delete Selected ({selected.size})
-            </button>
-          )}
-        </div>
+      <p className="mappings-subtitle">
+        Manage iCloud ↔ Amazon photo links. Deleting a mapping forces that photo to resync on the next cycle.
+      </p>
 
-        {data.length > 0 ? (
+      <div className="mappings-toolbar toolbar">
+        <input
+          type="text"
+          placeholder="Filter by ID or checksum..."
+          value={searchInput}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="mappings-search"
+          aria-label="Search mappings"
+        />
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setSelected(new Set());
+          }}
+          aria-label="Mappings page size"
+        >
+          <option value={25}>25 per page</option>
+          <option value={50}>50 per page</option>
+          <option value={100}>100 per page</option>
+        </select>
+        {selected.size > 0 && (
+          <button className="btn btn-danger" onClick={bulkDelete}>
+            Delete Selected ({selected.size})
+          </button>
+        )}
+      </div>
+
+      {loading && <div className="empty">Loading mappings…</div>}
+      {!loading && loadError && (
+        <div className="inline-error" role="alert">
+          Failed to load mappings: {loadError}
+          <button className="btn btn-sm" onClick={() => void fetchMappings(1)}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !loadError &&
+        (data.length > 0 ? (
           <>
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap mappings-table-wrap">
+              <table className="mappings-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 32, textAlign: "center" }}>
+                    <th className="mappings-select-col">
                       <input
                         type="checkbox"
                         checked={
@@ -188,28 +247,29 @@ export default function Mappings() {
                           data.every((m) => selected.has(m.icloudId))
                         }
                         onChange={(e) => toggleAll(e.target.checked)}
+                        aria-label="Select all mappings on this page"
                       />
                     </th>
                     <th>iCloud ID</th>
                     <th>Checksum</th>
                     <th>Amazon ID</th>
                     <th>Synced At</th>
-                    <th style={{ width: 60, textAlign: "center" }} />
+                    <th className="mappings-actions-col" />
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((m) => {
-                    const date = new Date(m.syncedAt);
-                    const dateStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+                    const dateStr = formatDateTime(m.syncedAt);
                     return (
-                      <tr key={m.icloudId}>
-                        <td style={{ textAlign: "center" }}>
+                      <tr key={m.icloudId} className={selected.has(m.icloudId) ? "selected" : undefined}>
+                        <td className="mappings-select-col">
                           <input
                             type="checkbox"
                             checked={selected.has(m.icloudId)}
                             onChange={(e) =>
                               toggleSelect(m.icloudId, e.target.checked)
                             }
+                            aria-label={`Select mapping ${m.icloudId}`}
                           />
                         </td>
                         <td className="mono" title={m.icloudId}>
@@ -222,12 +282,14 @@ export default function Mappings() {
                           {m.amazonId}
                         </td>
                         <td>{dateStr}</td>
-                        <td style={{ textAlign: "center" }}>
+                        <td className="mappings-actions-col">
                           <button
-                            className="btn btn-danger btn-sm"
+                            className="btn btn-danger btn-sm mappings-delete-btn"
                             onClick={() => deleteSingle(m.icloudId)}
+                            aria-label={`Delete mapping ${m.icloudId}`}
+                            title="Delete mapping"
                           >
-                            &times;
+                            <span aria-hidden="true">×</span>
                           </button>
                         </td>
                       </tr>
@@ -251,7 +313,7 @@ export default function Mappings() {
                 >
                   &laquo; Prev
                 </button>
-                <span style={{ fontSize: "0.85rem", padding: "0 0.5rem" }}>
+                <span className="mappings-page-label">
                   {pagination.totalPages > 0
                     ? `Page ${pagination.page} of ${pagination.totalPages}`
                     : ""}
@@ -268,9 +330,7 @@ export default function Mappings() {
           </>
         ) : (
           <div className="empty">No photo mappings found.</div>
-        )}
-      </div>
-      <Toast />
-    </>
+        ))}
+    </div>
   );
 }

@@ -1,35 +1,72 @@
-import { useEffect, useState, useCallback } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 type ToastType = "success" | "error";
 
-let showToastFn: (msg: string, type: ToastType) => void = () => {};
-
-export function toast(msg: string, type: ToastType = "success") {
-  showToastFn(msg, type);
+interface ToastState {
+  message: string;
+  type: ToastType;
+  visible: boolean;
 }
 
-export default function Toast() {
-  const [message, setMessage] = useState("");
-  const [type, setType] = useState<ToastType>("success");
-  const [visible, setVisible] = useState(false);
+interface ToastContextValue {
+  showToast: (message: string, type?: ToastType) => void;
+}
 
-  const show = useCallback((msg: string, t: ToastType) => {
-    setMessage(msg);
-    setType(t);
-    setVisible(true);
-    setTimeout(() => setVisible(false), 3000);
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toast, setToast] = useState<ToastState>({
+    message: "",
+    type: "success",
+    visible: false,
+  });
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string, type: ToastType = "success") => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+
+    setToast({ message, type, visible: true });
+    hideTimer.current = setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }));
+    }, 3000);
   }, []);
 
-  useEffect(() => {
-    showToastFn = show;
-    return () => {
-      showToastFn = () => {};
-    };
-  }, [show]);
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    },
+    [],
+  );
+
+  const value = useMemo(() => ({ showToast }), [showToast]);
 
   return (
-    <div className={`toast toast-${type}${visible ? " show" : ""}`}>
-      {message}
-    </div>
+    <ToastContext.Provider value={value}>
+      {children}
+      <div
+        className={`toast toast-${toast.type}${toast.visible ? " show" : ""}`}
+        role="status"
+        aria-live="polite"
+      >
+        {toast.message}
+      </div>
+    </ToastContext.Provider>
   );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error("useToast must be used within ToastProvider");
+  }
+  return context;
 }

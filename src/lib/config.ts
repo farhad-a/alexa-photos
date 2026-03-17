@@ -12,14 +12,14 @@ const configSchema = z.object({
     .default(60)
     .transform((s) => s * 1000),
   uploadDelayMs: z.coerce.number().default(0),
-  healthPort: z.coerce.number().default(3000),
+  serverPort: z.coerce.number().default(3000),
   alertWebhookUrl: z.string().optional(),
   pushoverToken: z.string().optional(),
   pushoverUser: z.string().optional(),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   cookieRefreshIntervalMs: z.coerce
     .number()
-    .default(23)
+    .default(8)
     .transform((h) => h * 60 * 60 * 1000),
 });
 
@@ -35,7 +35,7 @@ function loadConfig(): Config {
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     uploadDelayMs: process.env.UPLOAD_DELAY_MS,
-    healthPort: process.env.HEALTH_PORT,
+    serverPort: process.env.SERVER_PORT,
     alertWebhookUrl: process.env.ALERT_WEBHOOK_URL,
     pushoverToken: process.env.PUSHOVER_TOKEN,
     pushoverUser: process.env.PUSHOVER_USER,

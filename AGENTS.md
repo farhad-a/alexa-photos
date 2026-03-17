@@ -117,7 +117,7 @@ npm run ci
 
 - **Docker**: `node:25-slim` base image (no browser dependencies needed)
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
-- **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`. If refresh fails, alerts via webhook/Pushover
+- **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 23). If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
 - **Admin UI**: `http://localhost:3000/` — React UI served by backend (`web/dist`)
   - Home dashboard (`/`) with links to feature pages
