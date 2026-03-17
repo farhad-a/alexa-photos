@@ -413,6 +413,11 @@ describe("AmazonClient", () => {
           ok: false,
           status: 401,
           text: async () => "Refresh failed",
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => "Unauthorized",
         });
 
       const client = new AmazonClient(makeUsCookies(), { autoRefresh: true });
@@ -420,8 +425,8 @@ describe("AmazonClient", () => {
         client["request"]("GET", "https://www.amazon.com/drive/v1/nodes"),
       ).rejects.toThrow("auth failed");
 
-      // Should have been called twice: original request + refresh attempt
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Should have been called 3 times: original request + refresh attempt + auth verification
+      expect(mockFetch).toHaveBeenCalledTimes(3);
 
       // Second call should be to the refresh endpoint
       const refreshCall = mockFetch.mock.calls[1];
@@ -615,6 +620,72 @@ describe("AmazonClient", () => {
       expect(notificationCallback).toHaveBeenCalledWith(
         "Amazon Photos cookies refreshed successfully",
         "info",
+      );
+    });
+
+    it("sends warning (not manual re-auth error) when refresh fails but auth is still valid", async () => {
+      // Refresh attempt fails
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "Service Unavailable",
+      });
+
+      // Follow-up auth check succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ account: "ok" }),
+      });
+
+      const notificationCallback = vi.fn();
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+        notificationCallback,
+      });
+
+      const ok = await client.refreshNow();
+      expect(ok).toBe(false);
+
+      expect(notificationCallback).toHaveBeenCalledWith(
+        "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+        "warning",
+      );
+      expect(notificationCallback).not.toHaveBeenCalledWith(
+        "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
+        "error",
+      );
+    });
+
+    it("sends manual re-auth error only when refresh fails and auth is unauthorized", async () => {
+      // Refresh attempt fails
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "Unauthorized",
+      });
+
+      // Follow-up auth check confirms unauthorized
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => "Unauthorized",
+      });
+
+      const notificationCallback = vi.fn();
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+        notificationCallback,
+      });
+
+      const ok = await client.refreshNow();
+      expect(ok).toBe(false);
+
+      expect(notificationCallback).toHaveBeenCalledWith(
+        "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
+        "error",
       );
     });
   });

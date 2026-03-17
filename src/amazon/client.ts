@@ -324,12 +324,25 @@ export class AmazonClient {
       if (!response.ok) {
         logger.warn(
           { status: response.status },
-          "Token refresh failed — manual re-authentication required",
+          "Token refresh endpoint returned non-OK status",
         );
-        await this.notificationCallback?.(
-          "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
-          "error",
-        );
+
+        // Do not assume auth is expired just because refresh failed.
+        // Verify current auth state before deciding which notification to send.
+        const authStatus = await this.checkAuthStatus().catch(() => null);
+
+        if (authStatus?.state === "unauthorized") {
+          await this.notificationCallback?.(
+            "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
+            "error",
+          );
+        } else {
+          await this.notificationCallback?.(
+            "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
+            "warning",
+          );
+        }
+
         return false;
       }
 
