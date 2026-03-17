@@ -188,7 +188,8 @@ export class ICloudClient {
             "Failed to download photo after all retries",
           );
           throw new Error(
-            `Failed to download photo after ${maxRetries + 1} attempts: ${error}`,
+            `Failed to download photo after ${maxRetries + 1} attempts`,
+            { cause: error },
           );
         }
 
