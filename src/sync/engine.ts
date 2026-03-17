@@ -71,6 +71,7 @@ export class SyncEngine {
     const startTime = Date.now();
     let photosAdded = 0;
     let photosRemoved = 0;
+    let photosFailed = 0;
 
     try {
       logger.info("Starting sync");
@@ -113,7 +114,6 @@ export class SyncEngine {
       }
 
       // Process additions
-      let photosFailed = 0;
       for (let i = 0; i < toAdd.length; i++) {
         const photo = toAdd[i];
         try {
@@ -164,6 +164,32 @@ export class SyncEngine {
         success: true,
       };
       this.metrics.totalSyncs++;
+
+      // Send summary notification when something changed or failed.
+      if (photosAdded > 0 || photosRemoved > 0 || photosFailed > 0) {
+        const parts: string[] = [];
+        if (photosAdded > 0) {
+          parts.push(
+            `${photosAdded} photo${photosAdded === 1 ? "" : "s"} added`,
+          );
+        }
+        if (photosRemoved > 0) {
+          parts.push(
+            `${photosRemoved} photo${photosRemoved === 1 ? "" : "s"} removed`,
+          );
+        }
+        if (photosFailed > 0) {
+          parts.push(
+            `${photosFailed} upload${photosFailed === 1 ? "" : "s"} failed`,
+          );
+        }
+
+        await this.notifications.sendAlert(
+          `Sync complete: ${parts.join(", ")} (${Math.round(durationMs / 1000)}s).`,
+          photosFailed > 0 ? "warning" : "info",
+          { durationMs, photosAdded, photosRemoved, photosFailed },
+        );
+      }
     } catch (error) {
       logger.error({ error }, "Sync failed");
 

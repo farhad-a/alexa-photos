@@ -3,6 +3,7 @@ import { ICloudClient, ICloudPhoto } from "../icloud/client.js";
 import { AmazonClient } from "../amazon/client.js";
 import { StateStore } from "../state/store.js";
 import { SyncEngine } from "./engine.js";
+import { NotificationService } from "../lib/notifications.js";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -171,6 +172,33 @@ describe("SyncEngine", () => {
 
       // Auth status is now refreshed every run, even for no-op syncs.
       expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("sync summary notifications", () => {
+    it("does not send summary on no-op sync", async () => {
+      const notifySpy = vi.spyOn(NotificationService.prototype, "sendAlert");
+
+      await engine.run();
+
+      expect(notifySpy).not.toHaveBeenCalled();
+    });
+
+    it("sends summary when photos are added", async () => {
+      const notifySpy = vi.spyOn(NotificationService.prototype, "sendAlert");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([makePhoto("p1")]);
+
+      await engine.run();
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.stringContaining("Sync complete: 1 photo added"),
+        "info",
+        expect.objectContaining({
+          photosAdded: 1,
+          photosRemoved: 0,
+          photosFailed: 0,
+        }),
+      );
     });
   });
 
