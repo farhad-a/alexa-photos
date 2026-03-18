@@ -25,6 +25,7 @@ export interface AppServerOptions {
   cookiesPath?: string;
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
+  onCookiesSaved?: () => void | Promise<void>;
 }
 
 export class AppServer {
@@ -36,6 +37,7 @@ export class AppServer {
   private cookiesPath: string;
   private staticDir: string;
   private onAmazonAuthChecked?: (authenticated: boolean) => void;
+  private onCookiesSaved?: () => void | Promise<void>;
 
   constructor(options: AppServerOptions) {
     this.port = options.port;
@@ -43,6 +45,7 @@ export class AppServer {
     this.cookiesPath = options.cookiesPath ?? "./data/amazon-cookies.json";
     this.startTime = new Date();
     this.onAmazonAuthChecked = options.onAmazonAuthChecked;
+    this.onCookiesSaved = options.onCookiesSaved;
     this.staticDir =
       options.staticDir ??
       path.resolve(
@@ -339,6 +342,12 @@ export class AppServer {
       JSON.stringify(cookies, null, 2) + "\n",
     );
     logger.info("Cookies saved via UI");
+
+    try {
+      await this.onCookiesSaved?.();
+    } catch (error) {
+      logger.warn({ error }, "Failed to process post-save cookie hook");
+    }
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(

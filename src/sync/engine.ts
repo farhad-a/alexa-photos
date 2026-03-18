@@ -36,6 +36,7 @@ export class SyncEngine {
   private albumId: string | null = null;
   private notifications: NotificationService;
   private lastAuthStatus: AmazonAuthStatus | null = null;
+  private refreshIntervalStarted = false;
   private unauthorizedStreak = 0;
   private transientAuthFailureStreak = 0;
   private metrics: SyncMetrics = {
@@ -218,6 +219,41 @@ export class SyncEngine {
     this.metrics.nextSync = date;
   }
 
+  async reloadAmazonClient(): Promise<void> {
+    if (this.amazon) {
+      try {
+        await this.amazon.close();
+      } catch (error) {
+        logger.warn({ error }, "Failed to close existing Amazon client");
+      }
+    }
+
+    this.amazon = null;
+    this.albumId = null;
+    this.refreshIntervalStarted = false;
+    this.metrics.amazonAuthenticated = false;
+    this.metrics.amazonAuthStatus = undefined;
+    this.metrics.amazonAuthLastStatusCode = undefined;
+    this.lastAuthStatus = null;
+    this.unauthorizedStreak = 0;
+    this.transientAuthFailureStreak = 0;
+
+    logger.info("Amazon client reset; will reload cookies on next auth check");
+  }
+
+  private startRefreshIntervalIfNeeded(): void {
+    if (!this.amazon || this.refreshIntervalStarted) {
+      return;
+    }
+
+    this.amazon.startRefreshInterval(config.cookieRefreshIntervalMs, () => {
+      logger.warn(
+        "Cookie refresh failed; deferring health-state changes to sync auth checks",
+      );
+    });
+    this.refreshIntervalStarted = true;
+  }
+
   private async refreshAmazonAuthStatus(): Promise<boolean> {
     try {
       // Create client lazily so auth status can be checked even on no-op syncs.
@@ -228,6 +264,7 @@ export class SyncEngine {
           (message, level) => this.notifications.sendAlert(message, level),
           this.notifications,
         );
+        this.startRefreshIntervalIfNeeded();
       }
 
       let auth = await this.amazon.checkAuthStatus();
@@ -294,6 +331,30 @@ export class SyncEngine {
 
       return false;
     } catch (error) {
+      const isCookiesMissing =
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT";
+
+      if (isCookiesMissing) {
+        logger.info(
+          { path: config.amazonCookiesPath },
+          "Amazon cookies are not configured yet",
+        );
+        this.lastAuthStatus = {
+          ok: false,
+          state: "not_configured",
+          retriable: false,
+        };
+        this.metrics.amazonAuthenticated = false;
+        this.metrics.amazonAuthStatus = "not_configured";
+        this.metrics.amazonAuthLastStatusCode = undefined;
+        this.albumId = null;
+        this.unauthorizedStreak = 0;
+        this.transientAuthFailureStreak = 0;
+        return false;
+      }
+
       logger.warn({ error }, "Failed to refresh Amazon auth status");
       this.lastAuthStatus = {
         ok: false,
@@ -330,6 +391,10 @@ export class SyncEngine {
       return "Amazon Photos authentication check failed (network error) — retrying later.";
     }
 
+    if (auth.state === "not_configured") {
+      return "Amazon Photos cookies are not configured yet — add cookies in the Alexa Photos web UI (Cookies tab).";
+    }
+
     const suffix = auth.statusCode ? ` (status ${auth.statusCode})` : "";
     return `Amazon Photos authentication failed${suffix} — retrying later.`;
   }
@@ -343,6 +408,7 @@ export class SyncEngine {
         (message, level) => this.notifications.sendAlert(message, level),
         this.notifications,
       );
+      this.startRefreshIntervalIfNeeded();
     }
 
     // 2. Verify auth (once per authentication state reset)

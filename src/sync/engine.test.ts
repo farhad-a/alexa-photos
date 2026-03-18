@@ -96,6 +96,7 @@ vi.mock("../amazon/client.js", () => {
   const mockDeleteNodes = vi.fn().mockResolvedValue(undefined);
   const mockRefreshNow = vi.fn().mockResolvedValue(true);
   const mockClose = vi.fn().mockResolvedValue(undefined);
+  const mockStartRefreshInterval = vi.fn();
 
   const mockClient = {
     checkAuth: mockCheckAuth,
@@ -106,6 +107,7 @@ vi.mock("../amazon/client.js", () => {
     removeFromAlbum: mockRemoveFromAlbum,
     deleteNodes: mockDeleteNodes,
     refreshNow: mockRefreshNow,
+    startRefreshInterval: mockStartRefreshInterval,
     close: mockClose,
   };
 
@@ -551,6 +553,35 @@ describe("SyncEngine", () => {
       );
     });
 
+    it("reports not_configured when cookies file is missing during sync auth check", async () => {
+      const enoent = Object.assign(new Error("missing cookies"), {
+        code: "ENOENT",
+      });
+      vi.mocked(AmazonClient.fromFile).mockRejectedValueOnce(enoent as any);
+
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      await expect(engine.run()).rejects.toThrow(
+        "Amazon Photos cookies are not configured yet",
+      );
+
+      const metrics = engine.getMetrics();
+      expect(metrics.amazonAuthStatus).toBe("not_configured");
+      expect(metrics.amazonNetworkErrorCount).toBe(0);
+    });
+
+    it("starts refresh interval once when client is created lazily", async () => {
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      await engine.run();
+      await engine.run();
+
+      const mock = getAmazonMock();
+      expect(mock.startRefreshInterval).toHaveBeenCalledTimes(1);
+    });
+
     it("attempts refreshNow on 401 preflight and recovers", async () => {
       const mock = getAmazonMock();
       mock.checkAuthStatus
@@ -609,6 +640,22 @@ describe("SyncEngine", () => {
 
       // Auth status is refreshed each run.
       expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it("reloads cookies from disk after reset", async () => {
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      const injectedEngine = new SyncEngine(
+        icloud,
+        new StateStore(),
+        getAmazonMock(),
+      );
+
+      await injectedEngine.reloadAmazonClient();
+      await injectedEngine.run();
+
+      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
     });
   });
 
