@@ -294,6 +294,30 @@ export class SyncEngine {
 
       return false;
     } catch (error) {
+      const isCookiesMissing =
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT";
+
+      if (isCookiesMissing) {
+        logger.info(
+          { path: config.amazonCookiesPath },
+          "Amazon cookies are not configured yet",
+        );
+        this.lastAuthStatus = {
+          ok: false,
+          state: "not_configured",
+          retriable: false,
+        };
+        this.metrics.amazonAuthenticated = false;
+        this.metrics.amazonAuthStatus = "not_configured";
+        this.metrics.amazonAuthLastStatusCode = undefined;
+        this.albumId = null;
+        this.unauthorizedStreak = 0;
+        this.transientAuthFailureStreak = 0;
+        return false;
+      }
+
       logger.warn({ error }, "Failed to refresh Amazon auth status");
       this.lastAuthStatus = {
         ok: false,
@@ -328,6 +352,10 @@ export class SyncEngine {
 
     if (auth.state === "network") {
       return "Amazon Photos authentication check failed (network error) — retrying later.";
+    }
+
+    if (auth.state === "not_configured") {
+      return "Amazon Photos cookies are not configured yet — add cookies in the Alexa Photos web UI (Cookies tab).";
     }
 
     const suffix = auth.statusCode ? ` (status ${auth.statusCode})` : "";

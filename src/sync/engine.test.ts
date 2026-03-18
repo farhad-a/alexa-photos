@@ -551,6 +551,24 @@ describe("SyncEngine", () => {
       );
     });
 
+    it("reports not_configured when cookies file is missing during sync auth check", async () => {
+      const enoent = Object.assign(new Error("missing cookies"), {
+        code: "ENOENT",
+      });
+      vi.mocked(AmazonClient.fromFile).mockRejectedValueOnce(enoent as any);
+
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      await expect(engine.run()).rejects.toThrow(
+        "Amazon Photos cookies are not configured yet",
+      );
+
+      const metrics = engine.getMetrics();
+      expect(metrics.amazonAuthStatus).toBe("not_configured");
+      expect(metrics.amazonNetworkErrorCount).toBe(0);
+    });
+
     it("attempts refreshNow on 401 preflight and recovers", async () => {
       const mock = getAmazonMock();
       mock.checkAuthStatus

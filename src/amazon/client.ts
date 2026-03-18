@@ -49,6 +49,7 @@ export type AmazonAuthState =
   | "rate_limited"
   | "bot_detection"
   | "network"
+  | "not_configured"
   | "unknown";
 
 export interface AmazonAuthStatus {
