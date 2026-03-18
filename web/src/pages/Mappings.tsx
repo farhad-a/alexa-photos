@@ -67,9 +67,12 @@ export default function Mappings() {
       if (search) params.set("search", search);
 
       try {
-        const json = await getJson<MappingsResponse>(`/api/mappings?${params}`, {
-          signal: controller.signal,
-        });
+        const json = await getJson<MappingsResponse>(
+          `/api/mappings?${params}`,
+          {
+            signal: controller.signal,
+          },
+        );
         setData(json.data);
         setPagination(json.pagination);
         setLoadError(null);
@@ -77,7 +80,8 @@ export default function Mappings() {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
-        const message = err instanceof Error ? err.message : "Failed to load mappings";
+        const message =
+          err instanceof Error ? err.message : "Failed to load mappings";
         setLoadError(message);
         showToast(message, "error");
       } finally {
@@ -173,7 +177,10 @@ export default function Mappings() {
       showToast(`Deleted ${json.deleted} mapping(s)`, "success");
       await fetchMappings(pagination.page);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Bulk delete failed", "error");
+      showToast(
+        err instanceof Error ? err.message : "Bulk delete failed",
+        "error",
+      );
     }
   };
 
@@ -191,7 +198,8 @@ export default function Mappings() {
       </div>
 
       <p className="mappings-subtitle">
-        Manage iCloud ↔ Amazon photo links. Deleting a mapping forces that photo to resync on the next cycle.
+        Manage iCloud ↔ Amazon photo links. Deleting a mapping forces that photo
+        to resync on the next cycle.
       </p>
 
       <div className="mappings-toolbar toolbar">
@@ -232,7 +240,8 @@ export default function Mappings() {
         </div>
       )}
 
-      {!loading && !loadError &&
+      {!loading &&
+        !loadError &&
         (data.length > 0 ? (
           <>
             <div className="table-wrap mappings-table-wrap">
@@ -261,7 +270,12 @@ export default function Mappings() {
                   {data.map((m) => {
                     const dateStr = formatDateTime(m.syncedAt);
                     return (
-                      <tr key={m.icloudId} className={selected.has(m.icloudId) ? "selected" : undefined}>
+                      <tr
+                        key={m.icloudId}
+                        className={
+                          selected.has(m.icloudId) ? "selected" : undefined
+                        }
+                      >
                         <td className="mappings-select-col">
                           <input
                             type="checkbox"

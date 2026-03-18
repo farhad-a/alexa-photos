@@ -70,7 +70,10 @@ export default function Cookies() {
         showToast(json.error ?? "Authentication failed", "error");
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Test request failed", "error");
+      showToast(
+        err instanceof Error ? err.message : "Test request failed",
+        "error",
+      );
     } finally {
       setTesting(false);
     }
@@ -95,7 +98,10 @@ export default function Cookies() {
       setAuth(null);
       await fetchCookies();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Save request failed", "error");
+      showToast(
+        err instanceof Error ? err.message : "Save request failed",
+        "error",
+      );
     } finally {
       setSaving(false);
     }

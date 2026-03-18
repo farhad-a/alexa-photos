@@ -31,14 +31,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   });
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((message: string, type: ToastType = "success") => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
+  const showToast = useCallback(
+    (message: string, type: ToastType = "success") => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
 
-    setToast({ message, type, visible: true });
-    hideTimer.current = setTimeout(() => {
-      setToast((prev) => ({ ...prev, visible: false }));
-    }, 3000);
-  }, []);
+      setToast({ message, type, visible: true });
+      hideTimer.current = setTimeout(() => {
+        setToast((prev) => ({ ...prev, visible: false }));
+      }, 3000);
+    },
+    [],
+  );
 
   useEffect(
     () => () => {

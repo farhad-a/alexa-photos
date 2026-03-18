@@ -78,14 +78,15 @@ export default function Home() {
         <div>
           <div className="home-hero-label">Service Status</div>
           <div className={`home-hero-value ${metrics?.status ?? "starting"}`}>
-            {loading ? "Loading..." : metrics?.status ?? "unknown"}
+            {loading ? "Loading..." : (metrics?.status ?? "unknown")}
           </div>
         </div>
         <div className="home-hero-meta" role="status" aria-live="polite">
           <span
             className={`status-dot ${metrics?.amazonAuthenticated ? "ok" : "error"}`}
           />
-          Amazon auth {metrics?.amazonAuthenticated ? "connected" : "disconnected"}
+          Amazon auth{" "}
+          {metrics?.amazonAuthenticated ? "connected" : "disconnected"}
         </div>
       </div>
 
@@ -94,7 +95,9 @@ export default function Home() {
       <div className="home-metrics-grid">
         <div className="metric-tile">
           <div className="metric-label">Uptime</div>
-          <div className="metric-value">{metrics ? formatUptime(metrics.uptime) : "—"}</div>
+          <div className="metric-value">
+            {metrics ? formatUptime(metrics.uptime) : "—"}
+          </div>
         </div>
         <div className="metric-tile">
           <div className="metric-label">Total syncs</div>
@@ -115,16 +118,19 @@ export default function Home() {
         {metrics?.lastSync ? (
           <ul>
             <li>
-              <strong>When:</strong> {new Date(metrics.lastSync.timestamp).toLocaleString()}
+              <strong>When:</strong>{" "}
+              {new Date(metrics.lastSync.timestamp).toLocaleString()}
             </li>
             <li>
               <strong>Duration:</strong> {metrics.lastSync.durationMs} ms
             </li>
             <li>
-              <strong>Changes:</strong> +{metrics.lastSync.photosAdded} / -{metrics.lastSync.photosRemoved}
+              <strong>Changes:</strong> +{metrics.lastSync.photosAdded} / -
+              {metrics.lastSync.photosRemoved}
             </li>
             <li>
-              <strong>Result:</strong> {metrics.lastSync.success ? "Success" : "Failed"}
+              <strong>Result:</strong>{" "}
+              {metrics.lastSync.success ? "Success" : "Failed"}
             </li>
             {metrics.lastSync.error && (
               <li>
@@ -133,7 +139,8 @@ export default function Home() {
             )}
             {metrics.nextSync && (
               <li>
-                <strong>Next sync:</strong> {new Date(metrics.nextSync).toLocaleString()}
+                <strong>Next sync:</strong>{" "}
+                {new Date(metrics.nextSync).toLocaleString()}
               </li>
             )}
           </ul>
