@@ -219,6 +219,28 @@ export class SyncEngine {
     this.metrics.nextSync = date;
   }
 
+  async reloadAmazonClient(): Promise<void> {
+    if (this.amazon) {
+      try {
+        await this.amazon.close();
+      } catch (error) {
+        logger.warn({ error }, "Failed to close existing Amazon client");
+      }
+    }
+
+    this.amazon = null;
+    this.albumId = null;
+    this.refreshIntervalStarted = false;
+    this.metrics.amazonAuthenticated = false;
+    this.metrics.amazonAuthStatus = undefined;
+    this.metrics.amazonAuthLastStatusCode = undefined;
+    this.lastAuthStatus = null;
+    this.unauthorizedStreak = 0;
+    this.transientAuthFailureStreak = 0;
+
+    logger.info("Amazon client reset; will reload cookies on next auth check");
+  }
+
   private startRefreshIntervalIfNeeded(): void {
     if (!this.amazon || this.refreshIntervalStarted) {
       return;

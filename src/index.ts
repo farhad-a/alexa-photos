@@ -65,6 +65,13 @@ async function main() {
         amazonAuthenticated: authenticated,
       });
     },
+    onCookiesSaved: async () => {
+      await sync.reloadAmazonClient();
+      health.updateMetrics({
+        status: "unhealthy",
+        amazonAuthenticated: false,
+      });
+    },
   });
   await health.start();
 

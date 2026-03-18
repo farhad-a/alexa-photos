@@ -641,6 +641,22 @@ describe("SyncEngine", () => {
       // Auth status is refreshed each run.
       expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(2);
     });
+
+    it("reloads cookies from disk after reset", async () => {
+      const photo = makePhoto("p1");
+      vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
+
+      const injectedEngine = new SyncEngine(
+        icloud,
+        new StateStore(),
+        getAmazonMock(),
+      );
+
+      await injectedEngine.reloadAmazonClient();
+      await injectedEngine.run();
+
+      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("setAmazonAuthenticated", () => {
