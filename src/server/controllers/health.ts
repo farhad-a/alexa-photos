@@ -22,7 +22,6 @@ export function handleHealth(
   );
 }
 
-
 export function handleMetrics(
   context: AppRequestContext,
   res: ServerResponse,

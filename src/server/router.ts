@@ -1,10 +1,7 @@
 import { IncomingMessage, ServerResponse } from "http";
 import { ZodError } from "zod";
 import { logger as rootLogger } from "../lib/logger.js";
-import {
-  handleHealth,
-  handleMetrics,
-} from "./controllers/health.js";
+import { handleHealth, handleMetrics } from "./controllers/health.js";
 import {
   handleBulkDelete,
   handleDeleteMapping,
