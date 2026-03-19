@@ -27,7 +27,8 @@ function classifyIcloudStartupError(error: unknown): IcloudStartupErrorKind {
     }
 
     // Only treat high-confidence auth/config statuses as invalid token.
-    if (status === 401 || status === 403 || status === 404) {
+    // Note: 404 can be transient when partition discovery falls back.
+    if (status === 401 || status === 403) {
       return "invalid_token";
     }
 

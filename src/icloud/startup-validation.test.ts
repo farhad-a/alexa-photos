@@ -17,7 +17,7 @@ describe("startup iCloud validation", () => {
       _test.classifyIcloudStartupError(
         new Error("Failed to fetch asset URLs: 404"),
       ),
-    ).toBe("invalid_token");
+    ).toBe("transient");
     expect(
       _test.classifyIcloudStartupError(
         new Error("Failed to fetch webstream: 408"),
