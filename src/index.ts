@@ -10,6 +10,21 @@ import { StateStore } from "./state/store.js";
 import { AppServer } from "./server/index.js";
 import { NotificationService } from "./lib/notifications.js";
 
+async function validateIcloudStartupAccess(
+  icloud: ICloudClient,
+): Promise<void> {
+  try {
+    await icloud.getPhotos();
+    logger.info("iCloud startup validation succeeded");
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `ICLOUD_ALBUM_TOKEN validation failed. Verify ICLOUD_ALBUM_TOKEN points to a valid public shared album and restart. (${details})`,
+      { cause: error },
+    );
+  }
+}
+
 async function main() {
   logger.info(
     {
@@ -23,6 +38,8 @@ async function main() {
   );
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
+  await validateIcloudStartupAccess(icloud);
+
   const state = new StateStore();
 
   const notifications = new NotificationService(config);
