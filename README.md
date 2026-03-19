@@ -27,7 +27,7 @@ Uses the Amazon Photos REST API (no browser required).
 
 - iCloud shared album with "Public Website" enabled
 - Amazon Photos account (cookies from a browser session)
-- Docker (for production) or Node.js 20+ (for development)
+- Docker (for production) or Node.js 20+ (CI validates on 24 and 25)
 
 ### Development (Devcontainer)
 
@@ -53,7 +53,8 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
 2. Open DevTools → Application → Cookies → `www.amazon.com`
 3. Run `npm run amazon:setup` and paste the cookie values:
-   - **US**: `session-id`, `ubid-main`, `at-main`, `x-main`, `sess-at-main`, `sst-main`
+   - **US**: required `session-id`, `ubid-main`, `at-main`
+     - optional `x-main`, `sess-at-main`, `sst-main` (helps refresh reliability)
    - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}` (plus optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}` for best auto-refresh reliability)
 4. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
 
@@ -122,7 +123,7 @@ docker compose logs -f
 Run the full CI pipeline locally with a single command:
 
 ```bash
-npm run ci  # backend build + frontend build + format:check + lint + test (148 tests)
+npm run ci  # backend build + frontend build + format:check + lint + test
 ```
 
 Or run steps individually:
@@ -327,13 +328,15 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
 
 - `GET /health`
   - Health status + uptime/timestamp
+  - Response: `{ status, uptime, timestamp }` where `status` is typically `healthy` or `starting`
   - Example:
     ```bash
     curl http://localhost:3000/health
     ```
 
 - `GET /metrics`
-  - Runtime metrics (`totalSyncs`, `totalErrors`, `lastSync`, auth status, etc.)
+  - Runtime metrics
+  - Response fields include `status`, `uptime`, `lastSync`, `totalSyncs`, `totalErrors`, `amazonAuthenticated`
   - Example:
     ```bash
     curl http://localhost:3000/metrics
@@ -341,7 +344,7 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
 
 - `GET /api/cookies`
   - Read current cookies state
-  - Returns `{ exists, cookies, tld, region, presentKeys, missingKeys }`
+  - Returns `exists`, masked `cookies`, detected `tld`, `region`, `presentKeys`, and `missingKeys`
   - Example:
     ```bash
     curl http://localhost:3000/api/cookies
@@ -351,6 +354,8 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
   - Save cookies from either form:
     - `{ "cookieString": "..." }`
     - `{ "cookies": { "key": "value" } }`
+  - Calls optional post-save hook used by the sync service
+  - Response: `{ saved: true, ...cookieState }`
   - Example:
     ```bash
     curl -X POST http://localhost:3000/api/cookies \
@@ -359,15 +364,22 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
     ```
 
 - `POST /api/cookies/test`
-  - Test cookies against Amazon auth endpoint and return auth status
+  - Test cookies against Amazon auth endpoint
+  - Response includes `authenticated` and `error` on failure
   - Example:
     ```bash
     curl -X POST http://localhost:3000/api/cookies/test
     ```
 
 - `GET /api/mappings`
-  - List mappings with optional query params
-  - Query params: `page` (default `1`), `pageSize` (default `50`, max `200`), `search`, `sortBy=icloud_id|synced_at`, `sortOrder=asc|desc`
+  - List mappings with optional query params:
+    - `page` (default `1`)
+    - `pageSize` (default `50`, max `200`)
+    - `search`
+    - `sortBy=icloud_id|synced_at`
+    - `sortOrder=asc|desc`
+  - Returns `[]` when store is present but no mappings exist
+  - Returns `404` if state store is unavailable
   - Example:
     ```bash
     curl "http://localhost:3000/api/mappings?page=1&pageSize=20&sortBy=synced_at&sortOrder=desc"
@@ -376,6 +388,7 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
 - `POST /api/mappings/bulk-delete`
   - Bulk-delete mappings by iCloud IDs
   - Body: `{ "icloudIds": ["id1", "id2"] }`
+  - Returns `{ deleted }`
   - Example:
     ```bash
     curl -X POST http://localhost:3000/api/mappings/bulk-delete \
@@ -385,10 +398,16 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
 
 - `DELETE /api/mappings/{icloudId}`
   - Delete a single mapping by URL-decoded `icloudId`
+  - Returns `{ deleted }`
   - Example:
     ```bash
     curl -X DELETE http://localhost:3000/api/mappings/icloud-abc-123
     ```
+
+### Error Handling Notes
+
+- Invalid request payloads return `400` with an `error` message.
+- Missing state-backed routes (for mappings) return `404`.
 
 ### Admin UI
 

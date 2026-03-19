@@ -36,6 +36,8 @@
 
 The workflow uses GitHub's built-in `GITHUB_TOKEN` which is automatically provided.
 
+> Note: release tags should use a `v` prefix (for example `v1.0.11`) to match the GitHub Actions trigger and release workflow.
+
 For pushing to GitHub Container Registry, ensure:
 
 1. Go to repository Settings → Actions → General

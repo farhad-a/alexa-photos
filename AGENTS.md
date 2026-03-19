@@ -14,8 +14,13 @@ src/
 ├── sync/engine.ts        # Orchestrates diff detection and sync operations
 ├── state/store.ts        # SQLite mappings: icloud_id ↔ amazon_id
 ├── server/
-│   ├── index.ts          # AppServer: health, metrics, mappings API, cookies API
-│   └── static.ts         # Static file serving + SPA fallback
+│   ├── index.ts          # AppServer bootstrap + HTTP wiring
+│   ├── router.ts         # Route dispatcher for API + monitoring endpoints
+│   ├── http.ts           # Shared request/response helpers
+│   ├── static.ts         # Static file serving + SPA fallback
+│   ├── types.ts          # Request context model
+│   ├── controllers/      # Route handlers (health, mappings, cookies)
+│   └── services/         # Shared server-side service helpers
 └── lib/
     ├── config.ts         # Zod-validated env config
     ├── logger.ts         # Pino structured logging
@@ -62,7 +67,8 @@ web/
 - **Upload endpoint**: `https://content-na.drive.amazonaws.com/cdproxy/nodes`
 - **Base params**: `{ asset: 'ALL', tempLink: 'false', resourceVersion: 'V2', ContentType: 'JSON' }`
 - **TLD detection**: Auto-detected from cookie key names (`at-main`/`at_main` → US, `at-acb{tld}` → intl)
-- **Required US cookies**: `session-id`, `ubid-main`, `at-main`, `x-main`, `sess-at-main`, `sst-main`
+- **Required US cookies**: `session-id`, `ubid-main`, `at-main`
+- **Optional US cookies**: `x-main`, `sess-at-main`, `sst-main` (improve refresh reliability)
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
 ### SyncEngine ([src/sync/engine.ts](src/sync/engine.ts))
@@ -117,13 +123,13 @@ npm run ci
 
 - **Docker**: `node:25-slim` base image (no browser dependencies needed)
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
-- **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 23). If refresh fails, alerts via webhook/Pushover
+- **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 8). If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
 - **Admin UI**: `http://localhost:3000/` — React UI served by backend (`web/dist`)
   - Home dashboard (`/`) with links to feature pages
   - Photo mappings (`/mappings`): search, paginate, single-delete, bulk-delete
   - Amazon cookies (`/cookies`): view/save/test auth cookies
-- **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/cookies/test`
+- **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/cookies/test`.
 
 ## Important Notes & Gotchas
 
@@ -138,12 +144,12 @@ npm run ci
 
 - **ESLint**: `@typescript-eslint/no-explicit-any` is set to `warn` — use proper types (interfaces for API responses, SQLite rows, etc.) instead of `any`
 - **Prettier**: Formatting enforced via `npm run format:check` in CI
-- **CI**: GitHub Actions runs on Node 20 + 25 — replicate locally with `npm run ci`
+- **CI**: GitHub Actions runs on Node 24 + 25 — replicate locally with `npm run ci`
 - Run `npm run ci` before pushing to catch issues early
 
 ## Testing
 
-- **148 tests** across 7 test files
+- **190 passing tests** across 11 test files
 - Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications, server/API endpoints
 - Run with `npm test`
 
