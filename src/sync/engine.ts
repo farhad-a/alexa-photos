@@ -345,6 +345,9 @@ export class SyncEngine {
           ok: false,
           state: "not_configured",
           retriable: false,
+          provider: "amazon",
+          kind: "not_configured",
+          actionable: true,
         };
         this.metrics.amazonAuthenticated = false;
         this.metrics.amazonAuthStatus = "not_configured";
@@ -360,6 +363,9 @@ export class SyncEngine {
         ok: false,
         state: "network",
         retriable: true,
+        provider: "amazon",
+        kind: "network",
+        actionable: false,
       };
       this.metrics.amazonAuthenticated = false;
       this.metrics.amazonAuthStatus = "network";

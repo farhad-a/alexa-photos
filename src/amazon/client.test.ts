@@ -199,6 +199,82 @@ describe("AmazonClient", () => {
     });
   });
 
+  describe("checkAuthStatus", () => {
+    it("returns the normalized shared model for 200 OK", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+      const client = new AmazonClient(makeUsCookies());
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: true,
+        state: "ok",
+        provider: "amazon",
+        statusCode: 200,
+        kind: "ok",
+        retriable: false,
+        actionable: false,
+      });
+    });
+
+    it("returns an actionable unauthorized status for 401", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+      const client = new AmazonClient(makeUsCookies());
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: false,
+        state: "unauthorized",
+        provider: "amazon",
+        statusCode: 401,
+        kind: "unauthorized",
+        retriable: false,
+        actionable: true,
+      });
+    });
+
+    it("returns a retriable rate-limited status for 429", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 429 });
+      const client = new AmazonClient(makeUsCookies());
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: false,
+        state: "rate_limited",
+        provider: "amazon",
+        statusCode: 429,
+        kind: "rate_limited",
+        retriable: true,
+        actionable: false,
+      });
+    });
+
+    it("returns a retriable bot-detection status for 503", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
+      const client = new AmazonClient(makeUsCookies());
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: false,
+        state: "bot_detection",
+        provider: "amazon",
+        statusCode: 503,
+        kind: "bot_detection",
+        retriable: true,
+        actionable: false,
+      });
+    });
+
+    it("returns a retriable network status for fetch failures", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("network error"));
+      const client = new AmazonClient(makeUsCookies());
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: false,
+        state: "network",
+        provider: "amazon",
+        kind: "network",
+        retriable: true,
+        actionable: false,
+      });
+    });
+  });
+
   describe("getRoot", () => {
     it("returns root node and caches rootNodeId", async () => {
       const rootNode = {

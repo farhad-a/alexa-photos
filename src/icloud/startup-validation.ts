@@ -1,4 +1,5 @@
 import { ICloudClient } from "./client.js";
+import { classifyIcloudProviderError } from "../lib/provider-errors.js";
 
 export type IcloudStartupErrorKind = "invalid_token" | "transient";
 
@@ -8,54 +9,9 @@ export interface IcloudStartupValidationResult {
   details?: string;
 }
 
-function extractHttpStatus(message: string): number | undefined {
-  const m = message.match(/:\s*(\d{3})\b/);
-  if (!m) return undefined;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 function classifyIcloudStartupError(error: unknown): IcloudStartupErrorKind {
-  const message = (
-    error instanceof Error ? error.message : String(error)
-  ).toLowerCase();
-  const status = extractHttpStatus(message);
-
-  if (status !== undefined) {
-    if (status === 429 || status === 408 || status >= 500) {
-      return "transient";
-    }
-
-    // Only treat high-confidence auth/config statuses as invalid token.
-    // Note: 404 can be transient when partition discovery falls back.
-    if (status === 401 || status === 403) {
-      return "invalid_token";
-    }
-
-    if (status >= 400 && status < 500) {
-      return "transient";
-    }
-  }
-
-  const transientNeedles = [
-    "fetch failed",
-    "network",
-    "enotfound",
-    "econnreset",
-    "econnrefused",
-    "etimedout",
-    "timeout",
-    "dns",
-    "tls",
-    "socket",
-  ];
-
-  if (transientNeedles.some((needle) => message.includes(needle))) {
-    return "transient";
-  }
-
-  // Safe default: avoid crash loops on uncertain startup failures.
-  return "transient";
+  const normalized = classifyIcloudProviderError(error);
+  return normalized.kind === "invalid_token" ? "invalid_token" : "transient";
 }
 
 export async function validateIcloudStartupAccess(
@@ -84,6 +40,5 @@ export async function validateIcloudStartupAccess(
 }
 
 export const _test = {
-  extractHttpStatus,
   classifyIcloudStartupError,
 };

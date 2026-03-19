@@ -4,6 +4,11 @@ const logger = rootLogger.child({ component: "amazon" });
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import { NotificationService } from "../lib/notifications.js";
+import {
+  ProviderErrorStatus,
+  classifyAmazonAuthError,
+  classifyAmazonAuthResponse,
+} from "../lib/provider-errors.js";
 
 export interface NotificationCallback {
   (message: string, level: "error" | "warning" | "info"): Promise<void>;
@@ -57,6 +62,23 @@ export interface AmazonAuthStatus {
   state: AmazonAuthState;
   statusCode?: number;
   retriable: boolean;
+  provider: ProviderErrorStatus["provider"];
+  kind: ProviderErrorStatus["kind"];
+  actionable: boolean;
+}
+
+function toAmazonAuthStatus(
+  normalized: ProviderErrorStatus & { provider: "amazon" },
+): AmazonAuthStatus {
+  return {
+    ok: normalized.kind === "ok",
+    state: normalized.kind as AmazonAuthState,
+    statusCode: normalized.status,
+    retriable: normalized.retriable,
+    provider: normalized.provider,
+    kind: normalized.kind,
+    actionable: normalized.actionable,
+  };
 }
 
 export class AmazonClient {
@@ -438,62 +460,30 @@ export class AmazonClient {
         headers: this.headers,
       });
 
-      if (res.ok) {
-        return {
-          ok: true,
-          state: "ok",
-          statusCode: res.status,
-          retriable: false,
-        };
-      }
+      const normalized = classifyAmazonAuthResponse(res.status, res.ok);
 
-      if (res.status === 401) {
-        return {
-          ok: false,
-          state: "unauthorized",
-          statusCode: 401,
-          retriable: false,
-        };
-      }
-
-      if (res.status === 429) {
+      if (normalized.kind === "rate_limited") {
         logger.warn(
           "Got 429 from Amazon (rate-limited). Backing off and retrying later.",
         );
-        return {
-          ok: false,
-          state: "rate_limited",
-          statusCode: 429,
-          retriable: true,
-        };
       }
 
-      if (res.status === 503) {
+      if (normalized.kind === "bot_detection") {
         logger.warn(
           "Got 503 from Amazon (possible bot detection/risk). " +
             "This may happen from cloud/datacenter IPs.",
         );
-        return {
-          ok: false,
-          state: "bot_detection",
-          statusCode: 503,
-          retriable: true,
-        };
       }
 
-      return {
-        ok: false,
-        state: "unknown",
-        statusCode: res.status,
-        retriable: res.status >= 500,
-      };
+      return toAmazonAuthStatus(normalized as ProviderErrorStatus & {
+        provider: "amazon";
+      });
     } catch (error) {
+      const normalized = classifyAmazonAuthError(error);
       logger.warn({ error }, "Auth check failed (network error)");
-      return {
-        ok: false,
-        state: "network",
-        retriable: true,
-      };
+      return toAmazonAuthStatus(normalized as ProviderErrorStatus & {
+        provider: "amazon";
+      });
     }
   }
 

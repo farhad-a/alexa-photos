@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import { extractHttpStatus } from "../lib/provider-errors.js";
 import { _test, validateIcloudStartupAccess } from "./startup-validation.js";
 
 describe("startup iCloud validation", () => {
   it("extractHttpStatus parses 3-digit status from message", () => {
-    expect(_test.extractHttpStatus("Failed to fetch webstream: 403")).toBe(403);
-    expect(_test.extractHttpStatus("no status here")).toBeUndefined();
+    expect(extractHttpStatus("Failed to fetch webstream: 403")).toBe(403);
+    expect(extractHttpStatus("no status here")).toBeUndefined();
   });
 
   it("classifies only high-confidence auth 4xx as invalid_token", () => {

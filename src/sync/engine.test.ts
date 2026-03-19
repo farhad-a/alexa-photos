@@ -78,13 +78,24 @@ vi.mock("../amazon/client.js", () => {
   const mockCheckAuthStatus = vi.fn(async () => {
     const ok = await mockCheckAuth();
     if (ok) {
-      return { ok: true, state: "ok", statusCode: 200, retriable: false };
+      return {
+        ok: true,
+        state: "ok",
+        statusCode: 200,
+        retriable: false,
+        provider: "amazon",
+        kind: "ok",
+        actionable: false,
+      };
     }
     return {
       ok: false,
       state: "unauthorized",
       statusCode: 401,
       retriable: false,
+      provider: "amazon",
+      kind: "unauthorized",
+      actionable: true,
     };
   });
   const mockFindOrCreateAlbum = vi.fn().mockResolvedValue("album-123");
@@ -590,12 +601,18 @@ describe("SyncEngine", () => {
           state: "unauthorized",
           statusCode: 401,
           retriable: false,
+          provider: "amazon",
+          kind: "unauthorized",
+          actionable: true,
         })
         .mockResolvedValueOnce({
           ok: true,
           state: "ok",
           statusCode: 200,
           retriable: false,
+          provider: "amazon",
+          kind: "ok",
+          actionable: false,
         });
       mock.refreshNow.mockResolvedValueOnce(true);
 
