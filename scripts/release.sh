@@ -99,11 +99,11 @@ if git rev-parse "${NEW_VERSION}" >/dev/null 2>&1; then
 fi
 git tag -a "${NEW_VERSION}" -m "Release ${NEW_VERSION}"
 
-# Push commit + tag explicitly
+# Push commit + tag atomically to avoid half-released state
+# (ensures both refs update together or neither does).
 echo ""
-echo -e "${YELLOW}Pushing to origin...${NC}"
-git push origin main
-git push origin "${NEW_VERSION}"
+echo -e "${YELLOW}Pushing commit + tag atomically to origin...${NC}"
+git push --atomic origin main "${NEW_VERSION}"
 
 echo ""
 echo -e "${GREEN}✓ Release ${NEW_VERSION} initiated!${NC}"
