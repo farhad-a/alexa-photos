@@ -4,6 +4,7 @@ import { logger as rootLogger } from "./lib/logger.js";
 const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
+import { validateIcloudStartupAccess } from "./icloud/startup-validation.js";
 import { AmazonClient } from "./amazon/client.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
@@ -23,6 +24,7 @@ async function main() {
   );
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
+
   const state = new StateStore();
 
   const notifications = new NotificationService(config);
@@ -74,6 +76,16 @@ async function main() {
     },
   });
   await health.start();
+
+  const icloudValidation = await validateIcloudStartupAccess(icloud);
+  if (icloudValidation.validated) {
+    logger.info("iCloud startup validation succeeded");
+  } else {
+    logger.warn(
+      { details: icloudValidation.details },
+      "iCloud startup validation inconclusive; continuing and retrying on sync loop",
+    );
+  }
 
   if (amazon) {
     // Refresh cookies immediately at startup — manually-provided cookies may be
