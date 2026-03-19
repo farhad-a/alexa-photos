@@ -4,26 +4,12 @@ import { logger as rootLogger } from "./lib/logger.js";
 const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
+import { validateIcloudStartupAccess } from "./icloud/startup-validation.js";
 import { AmazonClient } from "./amazon/client.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
 import { AppServer } from "./server/index.js";
 import { NotificationService } from "./lib/notifications.js";
-
-async function validateIcloudStartupAccess(
-  icloud: ICloudClient,
-): Promise<void> {
-  try {
-    await icloud.getPhotos();
-    logger.info("iCloud startup validation succeeded");
-  } catch (error) {
-    const details = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `ICLOUD_ALBUM_TOKEN validation failed. Verify ICLOUD_ALBUM_TOKEN points to a valid public shared album and restart. (${details})`,
-      { cause: error },
-    );
-  }
-}
 
 async function main() {
   logger.info(
@@ -38,7 +24,15 @@ async function main() {
   );
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
-  await validateIcloudStartupAccess(icloud);
+  const icloudValidation = await validateIcloudStartupAccess(icloud);
+  if (icloudValidation.validated) {
+    logger.info("iCloud startup validation succeeded");
+  } else {
+    logger.warn(
+      { details: icloudValidation.details },
+      "iCloud startup validation inconclusive; continuing and retrying on sync loop",
+    );
+  }
 
   const state = new StateStore();
 
