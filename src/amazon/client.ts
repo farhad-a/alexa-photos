@@ -475,15 +475,19 @@ export class AmazonClient {
         );
       }
 
-      return toAmazonAuthStatus(normalized as ProviderErrorStatus & {
-        provider: "amazon";
-      });
+      return toAmazonAuthStatus(
+        normalized as ProviderErrorStatus & {
+          provider: "amazon";
+        },
+      );
     } catch (error) {
       const normalized = classifyAmazonAuthError(error);
       logger.warn({ error }, "Auth check failed (network error)");
-      return toAmazonAuthStatus(normalized as ProviderErrorStatus & {
-        provider: "amazon";
-      });
+      return toAmazonAuthStatus(
+        normalized as ProviderErrorStatus & {
+          provider: "amazon";
+        },
+      );
     }
   }
 

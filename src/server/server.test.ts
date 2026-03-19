@@ -284,7 +284,9 @@ describe("AppServer", () => {
           });
         }
 
-        const res = await request(server, { url: "/api/mappings?page=1&pageSize=3" });
+        const res = await request(server, {
+          url: "/api/mappings?page=1&pageSize=3",
+        });
         const json = res.json() as {
           data: unknown[];
           pagination: {
@@ -310,7 +312,9 @@ describe("AppServer", () => {
           });
         }
 
-        const res = await request(server, { url: "/api/mappings?page=2&pageSize=3" });
+        const res = await request(server, {
+          url: "/api/mappings?page=2&pageSize=3",
+        });
         const json = res.json() as { data: unknown[] };
         expect(json.data).toHaveLength(2);
       });
@@ -338,7 +342,9 @@ describe("AppServer", () => {
       });
 
       it("caps pageSize at 200", async () => {
-        const res = await request(server, { url: "/api/mappings?pageSize=999" });
+        const res = await request(server, {
+          url: "/api/mappings?pageSize=999",
+        });
         const json = res.json() as { pagination: { pageSize: number } };
         expect(json.pagination.pageSize).toBe(200);
       });
@@ -531,7 +537,8 @@ describe("AppServer", () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json()).toEqual({
-        error: "Could not detect region from cookies. Expected at-main (US) or at-acb{tld} (international).",
+        error:
+          "Could not detect region from cookies. Expected at-main (US) or at-acb{tld} (international).",
       });
     });
   });

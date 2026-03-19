@@ -17,7 +17,9 @@ describe("provider error normalization", () => {
   describe("classifyIcloudProviderError", () => {
     it("maps invalid token statuses to actionable non-retriable errors", () => {
       expect(
-        classifyIcloudProviderError(new Error("Failed to fetch webstream: 401")),
+        classifyIcloudProviderError(
+          new Error("Failed to fetch webstream: 401"),
+        ),
       ).toMatchObject({
         provider: "icloud",
         status: 401,
@@ -26,7 +28,9 @@ describe("provider error normalization", () => {
         actionable: true,
       });
       expect(
-        classifyIcloudProviderError(new Error("Failed to fetch webstream: 403")),
+        classifyIcloudProviderError(
+          new Error("Failed to fetch webstream: 403"),
+        ),
       ).toMatchObject({
         provider: "icloud",
         status: 403,
@@ -38,7 +42,9 @@ describe("provider error normalization", () => {
 
     it("maps transient iCloud failures to retryable non-actionable errors", () => {
       expect(
-        classifyIcloudProviderError(new Error("Failed to fetch asset URLs: 404")),
+        classifyIcloudProviderError(
+          new Error("Failed to fetch asset URLs: 404"),
+        ),
       ).toMatchObject({
         provider: "icloud",
         status: 404,
@@ -47,7 +53,9 @@ describe("provider error normalization", () => {
         actionable: false,
       });
       expect(
-        classifyIcloudProviderError(new Error("Failed to fetch webstream: 429")),
+        classifyIcloudProviderError(
+          new Error("Failed to fetch webstream: 429"),
+        ),
       ).toMatchObject({
         provider: "icloud",
         status: 429,
@@ -108,12 +116,14 @@ describe("provider error normalization", () => {
 
   describe("classifyAmazonAuthError", () => {
     it("normalizes network failures as retryable non-actionable errors", () => {
-      expect(classifyAmazonAuthError(new Error("network error"))).toMatchObject({
-        provider: "amazon",
-        kind: "network",
-        retriable: true,
-        actionable: false,
-      });
+      expect(classifyAmazonAuthError(new Error("network error"))).toMatchObject(
+        {
+          provider: "amazon",
+          kind: "network",
+          retriable: true,
+          actionable: false,
+        },
+      );
     });
   });
 });
