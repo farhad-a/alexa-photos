@@ -24,15 +24,6 @@ async function main() {
   );
 
   const icloud = new ICloudClient(config.icloudAlbumToken);
-  const icloudValidation = await validateIcloudStartupAccess(icloud);
-  if (icloudValidation.validated) {
-    logger.info("iCloud startup validation succeeded");
-  } else {
-    logger.warn(
-      { details: icloudValidation.details },
-      "iCloud startup validation inconclusive; continuing and retrying on sync loop",
-    );
-  }
 
   const state = new StateStore();
 
@@ -85,6 +76,16 @@ async function main() {
     },
   });
   await health.start();
+
+  const icloudValidation = await validateIcloudStartupAccess(icloud);
+  if (icloudValidation.validated) {
+    logger.info("iCloud startup validation succeeded");
+  } else {
+    logger.warn(
+      { details: icloudValidation.details },
+      "iCloud startup validation inconclusive; continuing and retrying on sync loop",
+    );
+  }
 
   if (amazon) {
     // Refresh cookies immediately at startup — manually-provided cookies may be

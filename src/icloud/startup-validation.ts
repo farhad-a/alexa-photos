@@ -22,11 +22,17 @@ function classifyIcloudStartupError(error: unknown): IcloudStartupErrorKind {
   const status = extractHttpStatus(message);
 
   if (status !== undefined) {
-    if (status === 429 || status >= 500) {
+    if (status === 429 || status === 408 || status >= 500) {
       return "transient";
     }
-    if (status >= 400 && status < 500) {
+
+    // Only treat high-confidence auth/config statuses as invalid token.
+    if (status === 401 || status === 403 || status === 404) {
       return "invalid_token";
+    }
+
+    if (status >= 400 && status < 500) {
+      return "transient";
     }
   }
 

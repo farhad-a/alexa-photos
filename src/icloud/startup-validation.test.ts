@@ -7,7 +7,7 @@ describe("startup iCloud validation", () => {
     expect(_test.extractHttpStatus("no status here")).toBeUndefined();
   });
 
-  it("classifies 4xx as invalid_token", () => {
+  it("classifies only high-confidence auth 4xx as invalid_token", () => {
     expect(
       _test.classifyIcloudStartupError(
         new Error("Failed to fetch webstream: 401"),
@@ -18,6 +18,16 @@ describe("startup iCloud validation", () => {
         new Error("Failed to fetch asset URLs: 404"),
       ),
     ).toBe("invalid_token");
+    expect(
+      _test.classifyIcloudStartupError(
+        new Error("Failed to fetch webstream: 408"),
+      ),
+    ).toBe("transient");
+    expect(
+      _test.classifyIcloudStartupError(
+        new Error("Failed to fetch webstream: 400"),
+      ),
+    ).toBe("transient");
   });
 
   it("classifies 429/5xx as transient", () => {
