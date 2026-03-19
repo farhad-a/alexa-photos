@@ -1,5 +1,4 @@
 import { ServerResponse } from "http";
-import { sendJson } from "../http.js";
 import { AppRequestContext } from "../types.js";
 
 export function handleHealth(
@@ -23,9 +22,6 @@ export function handleHealth(
   );
 }
 
-export function handleHello(res: ServerResponse): void {
-  sendJson(res, 200, { message: "hello from codex" });
-}
 
 export function handleMetrics(
   context: AppRequestContext,

@@ -182,12 +182,6 @@ describe("AppServer", () => {
       });
     });
 
-    it("GET /hello says hello", async () => {
-      const res = await request(server, { url: "/hello" });
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ message: "hello from codex" });
-    });
-
     it("GET /metrics returns metrics", async () => {
       const res = await request(server, { url: "/metrics" });
       expect(res.statusCode).toBe(200);

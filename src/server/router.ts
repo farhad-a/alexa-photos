@@ -3,7 +3,6 @@ import { ZodError } from "zod";
 import { logger as rootLogger } from "../lib/logger.js";
 import {
   handleHealth,
-  handleHello,
   handleMetrics,
 } from "./controllers/health.js";
 import {
@@ -42,10 +41,6 @@ export async function handleAppRequest(
   try {
     if (urlPath === "/health" && req.method === "GET") {
       handleHealth(context, res);
-      return;
-    }
-    if (urlPath === "/hello" && req.method === "GET") {
-      handleHello(res);
       return;
     }
     if (urlPath === "/metrics" && req.method === "GET") {
