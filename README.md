@@ -321,6 +321,75 @@ Returns detailed metrics:
 
 **Docker health check**: The compose file includes automatic health checks using the `/health` endpoint.
 
+### API Reference
+
+Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
+
+- `GET /health`
+  - Health status + uptime/timestamp
+  - Example:
+    ```bash
+    curl http://localhost:3000/health
+    ```
+
+- `GET /metrics`
+  - Runtime metrics (`totalSyncs`, `totalErrors`, `lastSync`, auth status, etc.)
+  - Example:
+    ```bash
+    curl http://localhost:3000/metrics
+    ```
+
+- `GET /api/cookies`
+  - Read current cookies state
+  - Returns `{ exists, cookies, tld, region, presentKeys, missingKeys }`
+  - Example:
+    ```bash
+    curl http://localhost:3000/api/cookies
+    ```
+
+- `POST /api/cookies`
+  - Save cookies from either form:
+    - `{ "cookieString": "..." }`
+    - `{ "cookies": { "key": "value" } }`
+  - Example:
+    ```bash
+    curl -X POST http://localhost:3000/api/cookies \
+      -H "Content-Type: application/json" \
+      -d '{"cookieString": "sess-at-main=...; x-main=..."}'
+    ```
+
+- `POST /api/cookies/test`
+  - Test cookies against Amazon auth endpoint and return auth status
+  - Example:
+    ```bash
+    curl -X POST http://localhost:3000/api/cookies/test
+    ```
+
+- `GET /api/mappings`
+  - List mappings with optional query params
+  - Query params: `page` (default `1`), `pageSize` (default `50`, max `200`), `search`, `sortBy=icloud_id|synced_at`, `sortOrder=asc|desc`
+  - Example:
+    ```bash
+    curl "http://localhost:3000/api/mappings?page=1&pageSize=20&sortBy=synced_at&sortOrder=desc"
+    ```
+
+- `POST /api/mappings/bulk-delete`
+  - Bulk-delete mappings by iCloud IDs
+  - Body: `{ "icloudIds": ["id1", "id2"] }`
+  - Example:
+    ```bash
+    curl -X POST http://localhost:3000/api/mappings/bulk-delete \
+      -H "Content-Type: application/json" \
+      -d '{"icloudIds":["icloud-1","icloud-2"]}'
+    ```
+
+- `DELETE /api/mappings/{icloudId}`
+  - Delete a single mapping by URL-decoded `icloudId`
+  - Example:
+    ```bash
+    curl -X DELETE http://localhost:3000/api/mappings/icloud-abc-123
+    ```
+
 ### Admin UI
 
 A web-based admin interface is available at `http://localhost:3000/`. Use it to:
