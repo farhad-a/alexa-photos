@@ -201,6 +201,41 @@ describe("AppServer", () => {
       const res = await request(server, { url: "/api/mappings" });
       expect(res.statusCode).toBe(404);
     });
+
+    it("GET /api/cookies returns empty state when cookies file is missing", async () => {
+      const res = await request(server, { url: "/api/cookies" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        exists: false,
+        cookies: {},
+        tld: null,
+        region: null,
+        presentKeys: [],
+        missingKeys: [],
+      });
+    });
+
+    it("POST /api/cookies/test reports missing cookies file", async () => {
+      const onAmazonAuthChecked = vi.fn();
+      server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        cookiesPath: "/tmp/does-not-exist.json",
+        onAmazonAuthChecked,
+      });
+
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/cookies/test",
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        authenticated: false,
+        error: "No cookies file found",
+      });
+      expect(onAmazonAuthChecked).toHaveBeenCalledWith(false);
+    });
   });
 
   describe("with state store", () => {
@@ -348,6 +383,15 @@ describe("AppServer", () => {
         });
         expect(res.json()).toEqual({ deleted: 1 });
       });
+
+      it("returns 400 for an empty icloudId", async () => {
+        const res = await request(server, {
+          method: "DELETE",
+          url: "/api/mappings/",
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({ error: "Invalid request" });
+      });
     });
 
     describe("POST /api/mappings/bulk-delete", () => {
@@ -404,6 +448,91 @@ describe("AppServer", () => {
     it("returns 404 for unknown paths", async () => {
       const res = await request(server, { url: "/unknown" });
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe("cookies API", () => {
+    let server: AppServer;
+    let tempDir: string;
+    let cookiesPath: string;
+    let onCookiesSaved: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "alexa-photos-cookies-"),
+      );
+      cookiesPath = path.join(tempDir, "amazon-cookies.json");
+      onCookiesSaved = vi.fn();
+      server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        cookiesPath,
+        onCookiesSaved,
+      });
+    });
+
+    afterEach(async () => {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    it("POST /api/cookies saves cookies from the body", async () => {
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/cookies",
+        body: JSON.stringify({
+          cookies: {
+            "session-id": "123456789",
+            "ubid-main": "ubid-main-value",
+            "at-main": "at-main-value",
+          },
+        }),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        saved: true,
+        exists: true,
+        tld: "com",
+        region: "US",
+        presentKeys: ["session-id", "ubid-main", "at-main"],
+        missingKeys: ["x-main", "sess-at-main", "sst-main"],
+      });
+      expect(onCookiesSaved).toHaveBeenCalledTimes(1);
+
+      const raw = await fs.readFile(cookiesPath, "utf-8");
+      expect(JSON.parse(raw)).toEqual({
+        "session-id": "123456789",
+        "ubid-main": "ubid-main-value",
+        "at-main": "at-main-value",
+      });
+    });
+
+    it("POST /api/cookies returns 400 for a missing payload", async () => {
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/cookies",
+        body: JSON.stringify({}),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({
+        error: 'Provide either "cookieString" or "cookies" in the body',
+      });
+    });
+
+    it("POST /api/cookies validates cookieString content", async () => {
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/cookies",
+        body: JSON.stringify({
+          cookieString: "session-id=123; ubid-main=456",
+        }),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({
+        error: "Could not detect region from cookies. Expected at-main (US) or at-acb{tld} (international).",
+      });
     });
   });
 });
