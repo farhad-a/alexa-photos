@@ -92,6 +92,8 @@ export class AppServer {
       // Health & metrics
       if (p === "/health" && req.method === "GET")
         return this.handleHealth(res);
+      if (p === "/hello" && req.method === "GET")
+        return this.handleHello(res);
       if (p === "/metrics" && req.method === "GET")
         return this.handleMetrics(res);
 
@@ -149,6 +151,11 @@ export class AppServer {
         2,
       ),
     );
+  }
+
+  private handleHello(res: ServerResponse): void {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ message: "hello from codex" }));
   }
 
   private handleMetrics(res: ServerResponse): void {
