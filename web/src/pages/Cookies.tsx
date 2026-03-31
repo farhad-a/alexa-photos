@@ -173,7 +173,10 @@ export default function Cookies() {
 
           {info.exists && (
             <>
-              <div className="home-metrics-grid" style={{ marginBottom: "1rem" }}>
+              <div
+                className="home-metrics-grid"
+                style={{ marginBottom: "1rem" }}
+              >
                 <div className="metric-tile">
                   <div className="metric-label">Last updated</div>
                   <div className="metric-value" style={{ fontSize: "1rem" }}>
@@ -185,7 +188,8 @@ export default function Cookies() {
                 <div className="metric-tile">
                   <div className="metric-label">Tracked auth cookies</div>
                   <div className="metric-value">
-                    {info.trackedPresentCount}/{info.trackedExpectedCount || "—"}
+                    {info.trackedPresentCount}/
+                    {info.trackedExpectedCount || "—"}
                   </div>
                 </div>
               </div>

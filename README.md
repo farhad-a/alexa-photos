@@ -115,6 +115,7 @@ docker compose logs -f
 | `npm run start`              | Run production build             |
 | `npm run ci`                 | Run full CI pipeline (backend + frontend + format + lint + test) |
 | `npm run icloud:test`        | Test iCloud album fetch          |
+| `npm run amazon:verify`      | Live-check Amazon auth + cookie rotation persistence |
 | `npm run notifications:test` | Test notification system         |
 
 ### Docker
@@ -463,6 +464,24 @@ The service automatically attempts to refresh expired authentication tokens usin
 In addition, when Amazon responses include tracked auth cookies via HTTP `Set-Cookie` headers, the service selectively persists those rotated values back to `AMAZON_COOKIES_PATH`. This keeps the saved cookie file aligned with the live session more like a normal browser cookie jar.
 
 If automatic refresh still fails, the service will send an alert (if notifications are configured) and you'll need to update cookies in the Alexa Photos web UI.
+
+### Verify Live Amazon Auth Behavior
+
+Use this when you want to validate the current saved cookies against real Amazon responses and confirm whether tracked auth cookies are being rotated and persisted:
+
+```bash
+npm run amazon:verify
+```
+
+The command prints a JSON summary with:
+
+- current auth state and HTTP status
+- whether a normal authenticated request path was exercised
+- whether the cookies file changed during verification
+- which tracked cookie keys changed (names only, never values)
+- before/after cookie-file update timestamps
+
+This is intended as an integration-level smoke test against live Amazon behavior, not a unit test replacement.
 
 To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 

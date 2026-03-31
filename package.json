@@ -18,6 +18,7 @@
     "web:build": "cd web && npm run build",
     "ci": "npm run build && npm run web:install && npm run web:build && npm run format:check && npm run lint && npm run test:run",
     "icloud:test": "tsx src/icloud/test.ts",
+    "amazon:verify": "tsx src/amazon/verify-live.ts",
     "notifications:test": "NODE_OPTIONS='--import tsx' node --env-file=.env src/lib/test-notifications.ts",
     "docker:build": "docker build -t alexa-photos:local .",
     "docker:run": "docker run --rm -v ./data:/app/data --env-file .env alexa-photos:local"
