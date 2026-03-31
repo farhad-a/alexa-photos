@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../components/Toast";
 import { getJson, postJson } from "../lib/api";
+import { requestMetricsRefresh } from "../lib/events";
 
 interface CookieInfo {
   exists: boolean;
@@ -70,14 +71,17 @@ export default function Cookies() {
       setAuth(json);
       if (json.authenticated) {
         showToast("Authentication successful", "success");
+        requestMetricsRefresh("cookies-test-success");
       } else {
         showToast(json.error ?? "Authentication failed", "error");
+        requestMetricsRefresh("cookies-test-failure");
       }
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Test request failed",
         "error",
       );
+      requestMetricsRefresh("cookies-test-error");
     } finally {
       setTesting(false);
     }
@@ -101,6 +105,7 @@ export default function Cookies() {
       setManualCookies({});
       setAuth(null);
       await fetchCookies(manualEntryTld);
+      requestMetricsRefresh("cookies-saved");
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Save request failed",
