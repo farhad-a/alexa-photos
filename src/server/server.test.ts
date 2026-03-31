@@ -201,11 +201,55 @@ describe("AppServer", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({
         exists: false,
+        updatedAt: null,
         cookies: {},
         tld: null,
         region: null,
+        manualEntryTld: "com",
+        manualEntryKeys: [
+          "session-id",
+          "ubid-main",
+          "at-main",
+          "x-main",
+          "sess-at-main",
+          "sst-main",
+          "session-token",
+          "session-id-time",
+        ],
+        manualEntryRegionOptions: [
+          { label: "US", tld: "com" },
+          { label: "Canada", tld: "ca" },
+          { label: "UK", tld: "co.uk" },
+          { label: "Germany", tld: "de" },
+          { label: "France", tld: "fr" },
+          { label: "Italy", tld: "it" },
+          { label: "Spain", tld: "es" },
+          { label: "Japan", tld: "co.jp" },
+          { label: "Australia", tld: "com.au" },
+        ],
         presentKeys: [],
+        trackedPresentCount: 0,
+        trackedExpectedCount: 0,
         missingKeys: [],
+      });
+    });
+
+    it("GET /api/cookies honors manual-entry region selection when file is missing", async () => {
+      const res = await request(server, { url: "/api/cookies?tld=de" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        exists: false,
+        manualEntryTld: "de",
+        manualEntryKeys: [
+          "session-id",
+          "ubid-acbde",
+          "at-acbde",
+          "x-acbde",
+          "sess-at-acbde",
+          "sst-acbde",
+          "session-token",
+          "session-id-time",
+        ],
       });
     });
 
@@ -492,10 +536,30 @@ describe("AppServer", () => {
       expect(res.json()).toMatchObject({
         saved: true,
         exists: true,
+        updatedAt: expect.any(String),
         tld: "com",
         region: "US",
+        manualEntryTld: "com",
+        manualEntryKeys: [
+          "session-id",
+          "ubid-main",
+          "at-main",
+          "x-main",
+          "sess-at-main",
+          "sst-main",
+          "session-token",
+          "session-id-time",
+        ],
         presentKeys: ["session-id", "ubid-main", "at-main"],
-        missingKeys: ["x-main", "sess-at-main", "sst-main"],
+        trackedPresentCount: 3,
+        trackedExpectedCount: 8,
+        missingKeys: [
+          "x-main",
+          "sess-at-main",
+          "sst-main",
+          "session-token",
+          "session-id-time",
+        ],
       });
       expect(onCookiesSaved).toHaveBeenCalledTimes(1);
 

@@ -4,30 +4,49 @@ import { AmazonClient, AmazonCookies } from "../../amazon/client.js";
 import {
   detectTld,
   extractRequiredCookies,
+  getExpectedCookieKeys,
+  getManualEntryCookieKeys,
   parseCookieString,
-} from "../../amazon/login.js";
+} from "../../amazon/cookies.js";
 
-export function buildCookieResponse(cookies: Record<string, string>) {
+export const MANUAL_ENTRY_REGION_OPTIONS = [
+  { label: "US", tld: "com" },
+  { label: "Canada", tld: "ca" },
+  { label: "UK", tld: "co.uk" },
+  { label: "Germany", tld: "de" },
+  { label: "France", tld: "fr" },
+  { label: "Italy", tld: "it" },
+  { label: "Spain", tld: "es" },
+  { label: "Japan", tld: "co.jp" },
+  { label: "Australia", tld: "com.au" },
+] as const;
+
+export function buildCookieResponse(
+  cookies: Record<string, string>,
+  options: { updatedAt?: string | null; manualEntryTld?: string } = {},
+) {
   const tld = detectTld(cookies);
+  const manualEntryTld = options.manualEntryTld ?? tld ?? "com";
   const masked: Record<string, string> = {};
   for (const [key, value] of Object.entries(cookies)) {
     masked[key] =
       value.length > 8 ? value.slice(0, 4) + "…" + value.slice(-4) : "••••";
   }
   const presentKeys = Object.keys(cookies);
-  const usRequired = ["session-id", "ubid-main", "at-main"];
-  const usOptional = ["x-main", "sess-at-main", "sst-main"];
-  const allExpected =
-    tld === "com"
-      ? [...usRequired, ...usOptional]
-      : ["session-id", `ubid-acb${tld}`, `at-acb${tld}`];
+  const allExpected = tld ? getExpectedCookieKeys(tld) : [];
 
   return {
     exists: true,
+    updatedAt: options.updatedAt ?? null,
     cookies: masked,
     tld,
     region: tld === "com" ? "US" : tld ? `amazon.${tld}` : null,
+    manualEntryTld,
+    manualEntryKeys: getManualEntryCookieKeys(manualEntryTld),
+    manualEntryRegionOptions: MANUAL_ENTRY_REGION_OPTIONS,
     presentKeys,
+    trackedPresentCount: presentKeys.length,
+    trackedExpectedCount: allExpected.length,
     missingKeys: allExpected.filter((key) => !cookies[key]),
   };
 }
@@ -35,6 +54,13 @@ export function buildCookieResponse(cookies: Record<string, string>) {
 export async function readCookiesFile(cookiesPath: string) {
   const raw = await fs.readFile(cookiesPath, "utf-8");
   return JSON.parse(raw) as Record<string, string>;
+}
+
+export async function readCookiesFileUpdatedAt(
+  cookiesPath: string,
+): Promise<string> {
+  const stat = await fs.stat(cookiesPath);
+  return stat.mtime.toISOString();
 }
 
 export async function saveCookiesFile(

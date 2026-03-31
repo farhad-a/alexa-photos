@@ -1,15 +1,19 @@
 import { IncomingMessage, ServerResponse } from "http";
 import { z } from "zod";
 import { logger as rootLogger } from "../../lib/logger.js";
+import { detectTld, getManualEntryCookieKeys } from "../../amazon/cookies.js";
 import { readBody, sendJson } from "../http.js";
 import {
   buildCookieResponse,
+  MANUAL_ENTRY_REGION_OPTIONS,
   readCookiesFile,
+  readCookiesFileUpdatedAt,
   resolveCookies,
   saveCookiesFile,
   testCookiesFile,
 } from "../services/cookies.js";
 import { AppRequestContext } from "../types.js";
+import { URL } from "url";
 
 const logger = rootLogger.child({ component: "server" });
 
@@ -24,11 +28,19 @@ const saveCookiesSchema = z
 
 export async function handleGetCookies(
   context: AppRequestContext,
+  url: URL,
   res: ServerResponse,
 ): Promise<void> {
+  const manualEntryTld = url.searchParams.get("tld") ?? "com";
+
   try {
     const cookies = await readCookiesFile(context.cookiesPath);
-    sendJson(res, 200, buildCookieResponse(cookies));
+    const updatedAt = await readCookiesFileUpdatedAt(context.cookiesPath);
+    sendJson(
+      res,
+      200,
+      buildCookieResponse(cookies, { updatedAt, manualEntryTld }),
+    );
   } catch (err) {
     const isNotFound =
       err instanceof Error &&
@@ -37,10 +49,16 @@ export async function handleGetCookies(
     if (isNotFound) {
       sendJson(res, 200, {
         exists: false,
+        updatedAt: null,
         cookies: {},
         tld: null,
         region: null,
+        manualEntryTld,
+        manualEntryKeys: getManualEntryCookieKeys(manualEntryTld),
+        manualEntryRegionOptions: MANUAL_ENTRY_REGION_OPTIONS,
         presentKeys: [],
+        trackedPresentCount: 0,
+        trackedExpectedCount: 0,
         missingKeys: [],
       });
       return;
@@ -81,6 +99,7 @@ export async function handleSaveCookies(
 
   await saveCookiesFile(context.cookiesPath, resolved.cookies!);
   logger.info("Cookies saved via UI");
+  const manualEntryTld = detectTld(resolved.cookies!) ?? "com";
 
   try {
     await context.onCookiesSaved?.();
@@ -90,7 +109,10 @@ export async function handleSaveCookies(
 
   sendJson(res, 200, {
     saved: true,
-    ...buildCookieResponse(resolved.cookies!),
+    ...buildCookieResponse(resolved.cookies!, {
+      updatedAt: new Date().toISOString(),
+      manualEntryTld,
+    }),
   });
 }
 

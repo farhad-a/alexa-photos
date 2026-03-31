@@ -3,7 +3,11 @@ import {
   parseCookieString,
   detectTld,
   extractRequiredCookies,
-} from "./login.js";
+  extractTrackedSetCookies,
+  getExpectedCookieKeys,
+  getManualEntryCookieKeys,
+  isTrackedAuthCookieName,
+} from "./cookies.js";
 
 describe("parseCookieString", () => {
   it("parses a standard cookie header string", () => {
@@ -170,5 +174,48 @@ describe("extractRequiredCookies", () => {
     const { missing } = extractRequiredCookies(partial, "co.uk");
     expect(missing).toContain("ubid-acbco.uk");
     expect(missing).toContain("at-acbco.uk");
+  });
+});
+
+describe("cookie metadata", () => {
+  it("returns the expected US cookie keys", () => {
+    expect(getExpectedCookieKeys("com")).toEqual([
+      "session-id",
+      "ubid-main",
+      "at-main",
+      "x-main",
+      "sess-at-main",
+      "sst-main",
+      "session-token",
+      "session-id-time",
+    ]);
+  });
+
+  it("uses the same keys for US manual entry", () => {
+    expect(getManualEntryCookieKeys()).toEqual(getExpectedCookieKeys("com"));
+  });
+
+  it("recognizes tracked auth cookie names", () => {
+    expect(isTrackedAuthCookieName("session-id")).toBe(true);
+    expect(isTrackedAuthCookieName("session-token")).toBe(true);
+    expect(isTrackedAuthCookieName("ubid-main")).toBe(true);
+    expect(isTrackedAuthCookieName("at-acbde")).toBe(true);
+    expect(isTrackedAuthCookieName("sst_main")).toBe(true);
+    expect(isTrackedAuthCookieName("csm-hit")).toBe(false);
+  });
+
+  it("extracts tracked cookies from Set-Cookie headers", () => {
+    const headers = new Headers();
+    headers.append(
+      "set-cookie",
+      "session-token=rotated; Path=/; Secure; HttpOnly",
+    );
+    headers.append("set-cookie", "at-main=Atza|new-token; Path=/; Secure");
+    headers.append("set-cookie", "csm-hit=ignore-me; Path=/");
+
+    expect(extractTrackedSetCookies(headers)).toEqual({
+      "session-token": "rotated",
+      "at-main": "Atza|new-token",
+    });
   });
 });

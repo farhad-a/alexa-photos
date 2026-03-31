@@ -5,6 +5,13 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import { NotificationService } from "../lib/notifications.js";
 import {
+  detectTld,
+  extractTrackedSetCookies,
+  getCookieKeyCandidates,
+  isAccessTokenCookieName,
+  isTrackedAuthCookieName,
+} from "./cookies.js";
+import {
   ProviderErrorStatus,
   classifyAmazonAuthError,
   classifyAmazonAuthResponse,
@@ -163,11 +170,7 @@ export class AmazonClient {
    * International: `at-acb{tld}`.
    */
   private determineTld(cookies: AmazonCookies): string {
-    for (const key of Object.keys(cookies)) {
-      if (key.endsWith("-main") || key.endsWith("_main")) return "com";
-      if (key.startsWith("at-acb")) return key.slice("at-acb".length);
-    }
-    return "com";
+    return detectTld(cookies) ?? "com";
   }
 
   private determineCdproxy(): string {
@@ -181,14 +184,7 @@ export class AmazonClient {
    * Build candidate cookie key names for US (-main/_main) and international (-acb{tld}/_acb{tld}) variants.
    */
   private cookieKeyCandidates(prefix: string): string[] {
-    const us = [`${prefix}-main`, `${prefix}_main`];
-
-    if (this.tld === "com") {
-      return us;
-    }
-
-    const intl = [`${prefix}-acb${this.tld}`, `${prefix}_acb${this.tld}`];
-    return [...intl, ...us];
+    return getCookieKeyCandidates(prefix, this.tld);
   }
 
   /**
@@ -201,16 +197,59 @@ export class AmazonClient {
     return null;
   }
 
-  private isRefreshAuthCookieName(name: string): boolean {
-    if (name === "session-id") return true;
-    if (name === "session-token") return true;
-    if (name === "session-id-time") return true;
-
-    return /^(at|sess-at|sst|x|ubid)(-|_)(main|acb.+)$/i.test(name);
+  private updateSessionIdFromCookies(source: string): void {
+    const nextSessionId = this.cookies["session-id"];
+    if (nextSessionId && nextSessionId !== this.sessionId) {
+      logger.info({ source }, "Amazon session-id rotated");
+      this.sessionId = nextSessionId;
+    }
   }
 
-  private isAccessTokenCookieName(name: string): boolean {
-    return /^at(-|_)(main|acb.+)$/i.test(name);
+  private async persistCookies(): Promise<void> {
+    await fs.writeFile(
+      this.cookiesPath,
+      JSON.stringify(this.cookies, null, 2),
+      "utf-8",
+    );
+  }
+
+  private async mergeTrackedCookies(
+    nextCookies: Record<string, string>,
+    source: string,
+  ): Promise<number> {
+    let updatedCookies = 0;
+
+    for (const [name, value] of Object.entries(nextCookies)) {
+      if (
+        !isTrackedAuthCookieName(name) ||
+        !value ||
+        this.cookies[name] === value
+      ) {
+        continue;
+      }
+
+      this.cookies[name] = value;
+      updatedCookies += 1;
+    }
+
+    if (updatedCookies > 0) {
+      this.updateSessionIdFromCookies(source);
+      await this.persistCookies();
+      logger.info(
+        { updatedCookies, source },
+        "Persisted updated Amazon auth cookies",
+      );
+    }
+
+    return updatedCookies;
+  }
+
+  private async persistCookiesFromResponse(
+    response: Pick<Response, "headers">,
+    source: string,
+  ): Promise<number> {
+    const setCookies = extractTrackedSetCookies(response.headers);
+    return this.mergeTrackedCookies(setCookies, source);
   }
 
   private get cookieHeader(): string {
@@ -258,6 +297,8 @@ export class AmazonClient {
         headers: { ...this.headers, ...options.headers },
         body: options.body,
       });
+
+      await this.persistCookiesFromResponse(res, `${method} ${fullUrl}`);
 
       if (res.status === 401) {
         // Try to refresh cookies automatically
@@ -346,6 +387,11 @@ export class AmazonClient {
         body: formData.toString(),
       });
 
+      await this.persistCookiesFromResponse(
+        response,
+        "token refresh response headers",
+      );
+
       if (!response.ok) {
         logger.warn(
           { status: response.status },
@@ -397,14 +443,16 @@ export class AmazonClient {
           continue;
         }
 
-        if (!this.isRefreshAuthCookieName(name)) {
+        if (!isTrackedAuthCookieName(name)) {
           continue;
         }
 
-        this.cookies[name] = value;
-        updatedCookies += 1;
+        if (this.cookies[name] !== value) {
+          this.cookies[name] = value;
+          updatedCookies += 1;
+        }
 
-        if (this.isAccessTokenCookieName(name)) {
+        if (isAccessTokenCookieName(name)) {
           updatedAccessToken = true;
         }
       }
@@ -414,19 +462,10 @@ export class AmazonClient {
         return false;
       }
 
-      // Keep request header session id aligned if Amazon rotated it.
-      const nextSessionId = this.cookies["session-id"];
-      if (nextSessionId && nextSessionId !== this.sessionId) {
-        logger.info("Amazon session-id rotated during cookie refresh");
-        this.sessionId = nextSessionId;
-      }
+      this.updateSessionIdFromCookies("token refresh response body");
 
       // Persist all refreshed auth cookies
-      await fs.writeFile(
-        this.cookiesPath,
-        JSON.stringify(this.cookies, null, 2),
-        "utf-8",
-      );
+      await this.persistCookies();
 
       logger.info(
         { updatedCookies },
@@ -459,6 +498,8 @@ export class AmazonClient {
       const res = await fetch(this.buildUrl(`${this.driveUrl}/account/info`), {
         headers: this.headers,
       });
+
+      await this.persistCookiesFromResponse(res, "auth status check");
 
       const normalized = classifyAmazonAuthResponse(res.status, res.ok);
 

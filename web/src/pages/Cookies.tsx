@@ -1,13 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../components/Toast";
 import { getJson, postJson } from "../lib/api";
+import { requestMetricsRefresh } from "../lib/events";
 
 interface CookieInfo {
   exists: boolean;
+  updatedAt: string | null;
   cookies: Record<string, string>;
   tld: string | null;
   region: string | null;
+  manualEntryTld: string;
+  manualEntryKeys: string[];
+  manualEntryRegionOptions: { label: string; tld: string }[];
   presentKeys: string[];
+  trackedPresentCount: number;
+  trackedExpectedCount: number;
   missingKeys: string[];
 }
 
@@ -26,33 +33,31 @@ export default function Cookies() {
   const [saving, setSaving] = useState(false);
   const [pasteMode, setPasteMode] = useState(true);
   const [cookieString, setCookieString] = useState("");
+  const [manualEntryTld, setManualEntryTld] = useState("com");
   const [manualCookies, setManualCookies] = useState<Record<string, string>>(
     {},
   );
 
-  const US_KEYS = [
-    "session-id",
-    "ubid-main",
-    "at-main",
-    "x-main",
-    "sess-at-main",
-    "sst-main",
-  ];
-
-  const fetchCookies = useCallback(async () => {
-    try {
-      const json = await getJson<CookieInfo>("/api/cookies");
-      setInfo(json);
-      setLoadError(null);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load cookie info";
-      setLoadError(message);
-      showToast(message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
+  const fetchCookies = useCallback(
+    async (tld = manualEntryTld) => {
+      try {
+        const json = await getJson<CookieInfo>(
+          `/api/cookies?tld=${encodeURIComponent(tld)}`,
+        );
+        setInfo(json);
+        setManualEntryTld(json.manualEntryTld);
+        setLoadError(null);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load cookie info";
+        setLoadError(message);
+        showToast(message, "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [manualEntryTld, showToast],
+  );
 
   useEffect(() => {
     void fetchCookies();
@@ -66,14 +71,17 @@ export default function Cookies() {
       setAuth(json);
       if (json.authenticated) {
         showToast("Authentication successful", "success");
+        requestMetricsRefresh("cookies-test-success");
       } else {
         showToast(json.error ?? "Authentication failed", "error");
+        requestMetricsRefresh("cookies-test-failure");
       }
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Test request failed",
         "error",
       );
+      requestMetricsRefresh("cookies-test-error");
     } finally {
       setTesting(false);
     }
@@ -96,7 +104,8 @@ export default function Cookies() {
       setCookieString("");
       setManualCookies({});
       setAuth(null);
-      await fetchCookies();
+      await fetchCookies(manualEntryTld);
+      requestMetricsRefresh("cookies-saved");
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Save request failed",
@@ -109,6 +118,13 @@ export default function Cookies() {
 
   const handleManualChange = (key: string, value: string) => {
     setManualCookies((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleManualRegionChange = async (nextTld: string) => {
+    setManualEntryTld(nextTld);
+    setManualCookies({});
+    setAuth(null);
+    await fetchCookies(nextTld);
   };
 
   return (
@@ -168,6 +184,27 @@ export default function Cookies() {
 
           {info.exists && (
             <>
+              <div
+                className="home-metrics-grid"
+                style={{ marginBottom: "1rem" }}
+              >
+                <div className="metric-tile">
+                  <div className="metric-label">Last updated</div>
+                  <div className="metric-value" style={{ fontSize: "1rem" }}>
+                    {info.updatedAt
+                      ? new Date(info.updatedAt).toLocaleString()
+                      : "—"}
+                  </div>
+                </div>
+                <div className="metric-tile">
+                  <div className="metric-label">Tracked auth cookies</div>
+                  <div className="metric-value">
+                    {info.trackedPresentCount}/
+                    {info.trackedExpectedCount || "—"}
+                  </div>
+                </div>
+              </div>
+
               <div className="section-header">Stored Cookies</div>
               <div className="cookie-grid">
                 {info.presentKeys.map((key) => (
@@ -220,8 +257,9 @@ export default function Cookies() {
       {pasteMode ? (
         <div>
           <p className="inline-muted">
-            Open Amazon Photos → DevTools → Network → any request → Cookie
-            header → copy the full value.
+            Preferred source: your browser's current cookie store for
+            `www.amazon.com`. A full Amazon Photos request `Cookie` header also
+            works, but the live browser cookie jar is less likely to be stale.
           </p>
           <textarea
             className="cookie-paste"
@@ -231,20 +269,37 @@ export default function Cookies() {
           />
         </div>
       ) : (
-        <div className="cookie-grid">
-          {US_KEYS.map((key) => (
-            <div className="cookie-row" key={key}>
-              <label>{key}</label>
-              <input
-                type="text"
-                style={{ flex: 1 }}
-                placeholder={`Enter ${key} value`}
-                value={manualCookies[key] ?? ""}
-                onChange={(e) => handleManualChange(key, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "0.35rem" }}>
+              Manual entry region
+            </label>
+            <select
+              value={manualEntryTld}
+              onChange={(e) => void handleManualRegionChange(e.target.value)}
+            >
+              {(info?.manualEntryRegionOptions ?? []).map((option) => (
+                <option key={option.tld} value={option.tld}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="cookie-grid">
+            {(info?.manualEntryKeys ?? []).map((key) => (
+              <div className="cookie-row" key={key}>
+                <label>{key}</label>
+                <input
+                  type="text"
+                  style={{ flex: 1 }}
+                  placeholder={`Enter ${key} value`}
+                  value={manualCookies[key] ?? ""}
+                  onChange={(e) => handleManualChange(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <div style={{ marginTop: "1rem" }}>

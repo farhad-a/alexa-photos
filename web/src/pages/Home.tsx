@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJson } from "../lib/api";
+import { METRICS_REFRESH_EVENT } from "../lib/events";
 
 interface LastSync {
   timestamp: string;
@@ -49,13 +50,36 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchMetrics();
+    void fetchMetrics();
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void fetchMetrics();
+      }
+    };
+
+    const handleFocus = () => {
+      void fetchMetrics();
+    };
+
+    const handleMetricsRefresh = () => {
+      void fetchMetrics();
+    };
 
     const id = setInterval(() => {
       if (!document.hidden) void fetchMetrics();
     }, 15000);
 
-    return () => clearInterval(id);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener(METRICS_REFRESH_EVENT, handleMetricsRefresh);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(METRICS_REFRESH_EVENT, handleMetricsRefresh);
+    };
   }, [fetchMetrics]);
 
   const successRate = useMemo(() => {

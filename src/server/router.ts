@@ -61,7 +61,7 @@ export async function handleAppRequest(
     }
 
     if (urlPath === "/api/cookies" && req.method === "GET") {
-      await handleGetCookies(context, res);
+      await handleGetCookies(context, url, res);
       return;
     }
     if (urlPath === "/api/cookies" && req.method === "POST") {
