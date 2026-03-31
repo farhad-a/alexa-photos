@@ -35,7 +35,7 @@ Uses the Amazon Photos REST API (no browser required).
 2. Click "Reopen in Container" when prompted
 3. Copy `.env.example` to `.env` and fill in your values
 4. Run `npm run icloud:test` to verify iCloud access
-5. Run `npm run amazon:setup` to save your Amazon cookies
+5. Start the app and save Amazon cookies in the web UI (`/cookies`)
 6. Run `npm run dev` to start the sync service
 
 ### Getting Your iCloud Album Token
@@ -51,14 +51,18 @@ Uses the Amazon Photos REST API (no browser required).
 The sync service authenticates to Amazon Photos via cookies (no passwords stored).
 
 1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
-2. Open DevTools → Application → Cookies → `www.amazon.com`
-3. Run `npm run amazon:setup` and paste the cookie values:
+2. Open the app's **Amazon Cookies** page (`/cookies`)
+3. Paste either:
+   - a full `Cookie` header string from your browser, or
+   - a JSON object of cookie key/value pairs
+4. The app extracts and stores the Amazon auth cookies it needs:
    - **US**: required `session-id`, `ubid-main`, `at-main`
-     - optional `x-main`, `sess-at-main`, `sst-main` (helps refresh reliability)
-   - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}` (plus optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}` for best auto-refresh reliability)
-4. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
+     - optional `x-main`, `sess-at-main`, `sst-main`, `session-token`, `session-id-time`
+   - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}`
+     - optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}`, `session-token`, `session-id-time`
+5. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
 
-> **Note:** Cookies expire periodically. Re-run `npm run amazon:setup` when
+> **Note:** Cookies expire periodically. Re-save them in the web UI when
 > the sync service reports an authentication error.
 
 ### Production Deployment
@@ -106,7 +110,6 @@ docker compose logs -f
 | `npm run start`              | Run production build             |
 | `npm run ci`                 | Run full CI pipeline (backend + frontend + format + lint + test) |
 | `npm run icloud:test`        | Test iCloud album fetch          |
-| `npm run amazon:setup`       | Save Amazon Photos cookies       |
 | `npm run notifications:test` | Test notification system         |
 
 ### Docker
@@ -196,7 +199,7 @@ ALERT_WEBHOOK_URL=https://your-webhook-url
 {
   "service": "alexa-photos",
   "level": "error",
-  "message": "Amazon Photos cookies expired and auto-refresh failed. Please run: npm run amazon:setup",
+  "message": "Amazon Photos cookies expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
   "timestamp": "2026-02-09T10:00:00.000Z",
   "details": {}
 }
@@ -360,7 +363,7 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
     ```bash
     curl -X POST http://localhost:3000/api/cookies \
       -H "Content-Type: application/json" \
-      -d '{"cookieString": "sess-at-main=...; x-main=..."}'
+      -d '{"cookieString": "session-id=...; ubid-main=...; at-main=...; sess-at-main=...; sst-main=..."}'
     ```
 
 - `POST /api/cookies/test`
@@ -449,7 +452,7 @@ UPLOAD_DELAY_MS=1000
 
 ### Amazon Cookies Expired
 
-The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to run `npm run amazon:setup` again to save fresh cookies from your browser.
+The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*`, `session-token`, and `session-id-time` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to update cookies in the Alexa Photos web UI.
 
 To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 

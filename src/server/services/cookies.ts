@@ -5,7 +5,7 @@ import {
   detectTld,
   extractRequiredCookies,
   parseCookieString,
-} from "../../amazon/login.js";
+} from "../../amazon/cookies.js";
 
 export function buildCookieResponse(cookies: Record<string, string>) {
   const tld = detectTld(cookies);

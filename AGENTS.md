@@ -99,8 +99,8 @@ web/
 # Test iCloud fetch (validates album token)
 ICLOUD_ALBUM_TOKEN=xxx npm run icloud:test
 
-# Save Amazon cookies (interactive, one-time)
-npm run amazon:setup
+# Save Amazon cookies (one-time or when auth expires)
+# Use the web UI at /cookies
 
 # Run sync service in watch mode
 npm run dev

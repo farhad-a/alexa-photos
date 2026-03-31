@@ -3,7 +3,7 @@ import {
   parseCookieString,
   detectTld,
   extractRequiredCookies,
-} from "./login.js";
+} from "./cookies.js";
 
 describe("parseCookieString", () => {
   it("parses a standard cookie header string", () => {
