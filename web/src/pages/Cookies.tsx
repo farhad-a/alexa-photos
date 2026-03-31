@@ -8,7 +8,9 @@ interface CookieInfo {
   cookies: Record<string, string>;
   tld: string | null;
   region: string | null;
+  manualEntryTld: string;
   manualEntryKeys: string[];
+  manualEntryRegionOptions: { label: string; tld: string }[];
   presentKeys: string[];
   trackedPresentCount: number;
   trackedExpectedCount: number;
@@ -30,24 +32,31 @@ export default function Cookies() {
   const [saving, setSaving] = useState(false);
   const [pasteMode, setPasteMode] = useState(true);
   const [cookieString, setCookieString] = useState("");
+  const [manualEntryTld, setManualEntryTld] = useState("com");
   const [manualCookies, setManualCookies] = useState<Record<string, string>>(
     {},
   );
 
-  const fetchCookies = useCallback(async () => {
-    try {
-      const json = await getJson<CookieInfo>("/api/cookies");
-      setInfo(json);
-      setLoadError(null);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load cookie info";
-      setLoadError(message);
-      showToast(message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
+  const fetchCookies = useCallback(
+    async (tld = manualEntryTld) => {
+      try {
+        const json = await getJson<CookieInfo>(
+          `/api/cookies?tld=${encodeURIComponent(tld)}`,
+        );
+        setInfo(json);
+        setManualEntryTld(json.manualEntryTld);
+        setLoadError(null);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load cookie info";
+        setLoadError(message);
+        showToast(message, "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [manualEntryTld, showToast],
+  );
 
   useEffect(() => {
     void fetchCookies();
@@ -91,7 +100,7 @@ export default function Cookies() {
       setCookieString("");
       setManualCookies({});
       setAuth(null);
-      await fetchCookies();
+      await fetchCookies(manualEntryTld);
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Save request failed",
@@ -104,6 +113,13 @@ export default function Cookies() {
 
   const handleManualChange = (key: string, value: string) => {
     setManualCookies((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleManualRegionChange = async (nextTld: string) => {
+    setManualEntryTld(nextTld);
+    setManualCookies({});
+    setAuth(null);
+    await fetchCookies(nextTld);
   };
 
   return (
@@ -248,20 +264,37 @@ export default function Cookies() {
           />
         </div>
       ) : (
-        <div className="cookie-grid">
-          {(info?.manualEntryKeys ?? []).map((key) => (
-            <div className="cookie-row" key={key}>
-              <label>{key}</label>
-              <input
-                type="text"
-                style={{ flex: 1 }}
-                placeholder={`Enter ${key} value`}
-                value={manualCookies[key] ?? ""}
-                onChange={(e) => handleManualChange(key, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "0.35rem" }}>
+              Manual entry region
+            </label>
+            <select
+              value={manualEntryTld}
+              onChange={(e) => void handleManualRegionChange(e.target.value)}
+            >
+              {(info?.manualEntryRegionOptions ?? []).map((option) => (
+                <option key={option.tld} value={option.tld}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="cookie-grid">
+            {(info?.manualEntryKeys ?? []).map((key) => (
+              <div className="cookie-row" key={key}>
+                <label>{key}</label>
+                <input
+                  type="text"
+                  style={{ flex: 1 }}
+                  placeholder={`Enter ${key} value`}
+                  value={manualCookies[key] ?? ""}
+                  onChange={(e) => handleManualChange(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <div style={{ marginTop: "1rem" }}>

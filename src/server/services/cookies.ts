@@ -9,11 +9,24 @@ import {
   parseCookieString,
 } from "../../amazon/cookies.js";
 
+export const MANUAL_ENTRY_REGION_OPTIONS = [
+  { label: "US", tld: "com" },
+  { label: "Canada", tld: "ca" },
+  { label: "UK", tld: "co.uk" },
+  { label: "Germany", tld: "de" },
+  { label: "France", tld: "fr" },
+  { label: "Italy", tld: "it" },
+  { label: "Spain", tld: "es" },
+  { label: "Japan", tld: "co.jp" },
+  { label: "Australia", tld: "com.au" },
+] as const;
+
 export function buildCookieResponse(
   cookies: Record<string, string>,
-  options: { updatedAt?: string | null } = {},
+  options: { updatedAt?: string | null; manualEntryTld?: string } = {},
 ) {
   const tld = detectTld(cookies);
+  const manualEntryTld = options.manualEntryTld ?? tld ?? "com";
   const masked: Record<string, string> = {};
   for (const [key, value] of Object.entries(cookies)) {
     masked[key] =
@@ -28,7 +41,9 @@ export function buildCookieResponse(
     cookies: masked,
     tld,
     region: tld === "com" ? "US" : tld ? `amazon.${tld}` : null,
-    manualEntryKeys: getManualEntryCookieKeys(tld ?? "com"),
+    manualEntryTld,
+    manualEntryKeys: getManualEntryCookieKeys(manualEntryTld),
+    manualEntryRegionOptions: MANUAL_ENTRY_REGION_OPTIONS,
     presentKeys,
     trackedPresentCount: presentKeys.length,
     trackedExpectedCount: allExpected.length,
