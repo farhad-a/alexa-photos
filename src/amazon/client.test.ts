@@ -658,6 +658,43 @@ describe("AmazonClient", () => {
       );
     });
 
+    it("persists tracked Set-Cookie headers from normal API responses", async () => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session-token=rotated-token; Path=/; Secure; HttpOnly",
+      );
+      headers.append("set-cookie", "session-id=200-rotated; Path=/; Secure");
+      headers.append("set-cookie", "csm-hit=ignore-me; Path=/");
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers,
+        json: async () => ({ success: true }),
+      });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      const result = await client["request"](
+        "GET",
+        "https://www.amazon.com/drive/v1/nodes",
+      );
+
+      expect(result.ok).toBe(true);
+      expect(client["headers"]["x-amzn-sessionid"]).toBe("200-rotated");
+
+      const writeFileMock = vi.mocked(fs.writeFile);
+      expect(writeFileMock).toHaveBeenCalledWith(
+        "/tmp/test-cookies.json",
+        expect.stringContaining('"session-token": "rotated-token"'),
+        "utf-8",
+      );
+    });
+
     it("sends recovery notification after successful token refresh", async () => {
       // First call: 401 error
       mockFetch.mockResolvedValueOnce({

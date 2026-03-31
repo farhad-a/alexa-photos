@@ -4,6 +4,7 @@ import { AmazonClient, AmazonCookies } from "../../amazon/client.js";
 import {
   detectTld,
   extractRequiredCookies,
+  getExpectedCookieKeys,
   parseCookieString,
 } from "../../amazon/cookies.js";
 
@@ -15,12 +16,7 @@ export function buildCookieResponse(cookies: Record<string, string>) {
       value.length > 8 ? value.slice(0, 4) + "…" + value.slice(-4) : "••••";
   }
   const presentKeys = Object.keys(cookies);
-  const usRequired = ["session-id", "ubid-main", "at-main"];
-  const usOptional = ["x-main", "sess-at-main", "sst-main"];
-  const allExpected =
-    tld === "com"
-      ? [...usRequired, ...usOptional]
-      : ["session-id", `ubid-acb${tld}`, `at-acb${tld}`];
+  const allExpected = tld ? getExpectedCookieKeys(tld) : [];
 
   return {
     exists: true,

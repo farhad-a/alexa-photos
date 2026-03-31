@@ -495,7 +495,13 @@ describe("AppServer", () => {
         tld: "com",
         region: "US",
         presentKeys: ["session-id", "ubid-main", "at-main"],
-        missingKeys: ["x-main", "sess-at-main", "sst-main"],
+        missingKeys: [
+          "x-main",
+          "sess-at-main",
+          "sst-main",
+          "session-token",
+          "session-id-time",
+        ],
       });
       expect(onCookiesSaved).toHaveBeenCalledTimes(1);
 

@@ -2,6 +2,17 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../components/Toast";
 import { getJson, postJson } from "../lib/api";
 
+const MANUAL_COOKIE_KEYS = [
+  "session-id",
+  "ubid-main",
+  "at-main",
+  "x-main",
+  "sess-at-main",
+  "sst-main",
+  "session-token",
+  "session-id-time",
+];
+
 interface CookieInfo {
   exists: boolean;
   cookies: Record<string, string>;
@@ -29,15 +40,6 @@ export default function Cookies() {
   const [manualCookies, setManualCookies] = useState<Record<string, string>>(
     {},
   );
-
-  const US_KEYS = [
-    "session-id",
-    "ubid-main",
-    "at-main",
-    "x-main",
-    "sess-at-main",
-    "sst-main",
-  ];
 
   const fetchCookies = useCallback(async () => {
     try {
@@ -220,8 +222,9 @@ export default function Cookies() {
       {pasteMode ? (
         <div>
           <p className="inline-muted">
-            Open Amazon Photos → DevTools → Network → any request → Cookie
-            header → copy the full value.
+            Paste the current Amazon Photos cookie string from your browser.
+            Include `session-id`, `ubid-main`, `at-main`, and any available
+            refresh cookies.
           </p>
           <textarea
             className="cookie-paste"
@@ -232,7 +235,7 @@ export default function Cookies() {
         </div>
       ) : (
         <div className="cookie-grid">
-          {US_KEYS.map((key) => (
+          {MANUAL_COOKIE_KEYS.map((key) => (
             <div className="cookie-row" key={key}>
               <label>{key}</label>
               <input
