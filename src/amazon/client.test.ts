@@ -273,6 +273,33 @@ describe("AmazonClient", () => {
         actionable: false,
       });
     });
+
+    it("persists tracked Set-Cookie headers returned by auth checks", async () => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session-token=rotated-from-auth-check; Path=/; Secure; HttpOnly",
+      );
+      headers.append("set-cookie", "session-id=200-auth-check; Path=/; Secure");
+
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, headers });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      await expect(client.checkAuthStatus()).resolves.toMatchObject({
+        ok: true,
+        state: "ok",
+      });
+
+      expect(client["headers"]["x-amzn-sessionid"]).toBe("200-auth-check");
+      expect(vi.mocked(fs.writeFile)).toHaveBeenCalledWith(
+        "/tmp/test-cookies.json",
+        expect.stringContaining('"session-token": "rotated-from-auth-check"'),
+        "utf-8",
+      );
+    });
   });
 
   describe("getRoot", () => {
@@ -722,6 +749,50 @@ describe("AmazonClient", () => {
 
       expect(result.ok).toBe(true);
       expect(vi.mocked(fs.writeFile)).not.toHaveBeenCalled();
+    });
+
+    it("merges tracked cookies from refresh response headers and body", async () => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session-token=header-rotated-token; Path=/; Secure; HttpOnly",
+      );
+      headers.append("set-cookie", "session-id=200-header; Path=/; Secure");
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers,
+        json: async () => ({
+          response: {
+            tokens: {
+              cookies: [
+                { Name: "at-main", Value: "Atza|body-new-token" },
+                { Name: "sess-at-main", Value: "sess-body-new" },
+              ],
+            },
+          },
+        }),
+      });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      const ok = await client.refreshNow();
+
+      expect(ok).toBe(true);
+      expect(client["headers"]["x-amzn-sessionid"]).toBe("200-header");
+      expect(vi.mocked(fs.writeFile)).toHaveBeenLastCalledWith(
+        "/tmp/test-cookies.json",
+        expect.stringContaining('"session-token": "header-rotated-token"'),
+        "utf-8",
+      );
+      expect(vi.mocked(fs.writeFile)).toHaveBeenLastCalledWith(
+        "/tmp/test-cookies.json",
+        expect.stringContaining('"at-main": "Atza|body-new-token"'),
+        "utf-8",
+      );
     });
 
     it("sends recovery notification after successful token refresh", async () => {
