@@ -695,6 +695,35 @@ describe("AmazonClient", () => {
       );
     });
 
+    it("does not persist when Set-Cookie values match existing cookies", async () => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session-id=133-1234567-8901234; Path=/; Secure",
+      );
+      headers.append("set-cookie", "at-main=Atza|fake-token; Path=/; Secure");
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers,
+        json: async () => ({ success: true }),
+      });
+
+      const client = new AmazonClient(makeUsCookies(), {
+        autoRefresh: true,
+        cookiesPath: "/tmp/test-cookies.json",
+      });
+
+      const result = await client["request"](
+        "GET",
+        "https://www.amazon.com/drive/v1/nodes",
+      );
+
+      expect(result.ok).toBe(true);
+      expect(vi.mocked(fs.writeFile)).not.toHaveBeenCalled();
+    });
+
     it("sends recovery notification after successful token refresh", async () => {
       // First call: 401 error
       mockFetch.mockResolvedValueOnce({
