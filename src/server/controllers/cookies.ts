@@ -1,6 +1,7 @@
 import { IncomingMessage, ServerResponse } from "http";
 import { z } from "zod";
 import { logger as rootLogger } from "../../lib/logger.js";
+import { getManualEntryCookieKeys } from "../../amazon/cookies.js";
 import { readBody, sendJson } from "../http.js";
 import {
   buildCookieResponse,
@@ -43,6 +44,7 @@ export async function handleGetCookies(
         cookies: {},
         tld: null,
         region: null,
+        manualEntryKeys: getManualEntryCookieKeys(),
         presentKeys: [],
         trackedPresentCount: 0,
         trackedExpectedCount: 0,

@@ -2,23 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../components/Toast";
 import { getJson, postJson } from "../lib/api";
 
-const MANUAL_COOKIE_KEYS = [
-  "session-id",
-  "ubid-main",
-  "at-main",
-  "x-main",
-  "sess-at-main",
-  "sst-main",
-  "session-token",
-  "session-id-time",
-];
-
 interface CookieInfo {
   exists: boolean;
   updatedAt: string | null;
   cookies: Record<string, string>;
   tld: string | null;
   region: string | null;
+  manualEntryKeys: string[];
   presentKeys: string[];
   trackedPresentCount: number;
   trackedExpectedCount: number;
@@ -259,7 +249,7 @@ export default function Cookies() {
         </div>
       ) : (
         <div className="cookie-grid">
-          {MANUAL_COOKIE_KEYS.map((key) => (
+          {(info?.manualEntryKeys ?? []).map((key) => (
             <div className="cookie-row" key={key}>
               <label>{key}</label>
               <input

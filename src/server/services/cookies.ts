@@ -5,6 +5,7 @@ import {
   detectTld,
   extractRequiredCookies,
   getExpectedCookieKeys,
+  getManualEntryCookieKeys,
   parseCookieString,
 } from "../../amazon/cookies.js";
 
@@ -27,6 +28,7 @@ export function buildCookieResponse(
     cookies: masked,
     tld,
     region: tld === "com" ? "US" : tld ? `amazon.${tld}` : null,
+    manualEntryKeys: getManualEntryCookieKeys(tld ?? "com"),
     presentKeys,
     trackedPresentCount: presentKeys.length,
     trackedExpectedCount: allExpected.length,
