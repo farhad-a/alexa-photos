@@ -5,6 +5,7 @@ import { readBody, sendJson } from "../http.js";
 import {
   buildCookieResponse,
   readCookiesFile,
+  readCookiesFileUpdatedAt,
   resolveCookies,
   saveCookiesFile,
   testCookiesFile,
@@ -28,7 +29,8 @@ export async function handleGetCookies(
 ): Promise<void> {
   try {
     const cookies = await readCookiesFile(context.cookiesPath);
-    sendJson(res, 200, buildCookieResponse(cookies));
+    const updatedAt = await readCookiesFileUpdatedAt(context.cookiesPath);
+    sendJson(res, 200, buildCookieResponse(cookies, { updatedAt }));
   } catch (err) {
     const isNotFound =
       err instanceof Error &&
@@ -37,10 +39,13 @@ export async function handleGetCookies(
     if (isNotFound) {
       sendJson(res, 200, {
         exists: false,
+        updatedAt: null,
         cookies: {},
         tld: null,
         region: null,
         presentKeys: [],
+        trackedPresentCount: 0,
+        trackedExpectedCount: 0,
         missingKeys: [],
       });
       return;
@@ -90,7 +95,9 @@ export async function handleSaveCookies(
 
   sendJson(res, 200, {
     saved: true,
-    ...buildCookieResponse(resolved.cookies!),
+    ...buildCookieResponse(resolved.cookies!, {
+      updatedAt: new Date().toISOString(),
+    }),
   });
 }
 

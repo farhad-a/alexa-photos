@@ -15,10 +15,13 @@ const MANUAL_COOKIE_KEYS = [
 
 interface CookieInfo {
   exists: boolean;
+  updatedAt: string | null;
   cookies: Record<string, string>;
   tld: string | null;
   region: string | null;
   presentKeys: string[];
+  trackedPresentCount: number;
+  trackedExpectedCount: number;
   missingKeys: string[];
 }
 
@@ -170,6 +173,23 @@ export default function Cookies() {
 
           {info.exists && (
             <>
+              <div className="home-metrics-grid" style={{ marginBottom: "1rem" }}>
+                <div className="metric-tile">
+                  <div className="metric-label">Last updated</div>
+                  <div className="metric-value" style={{ fontSize: "1rem" }}>
+                    {info.updatedAt
+                      ? new Date(info.updatedAt).toLocaleString()
+                      : "—"}
+                  </div>
+                </div>
+                <div className="metric-tile">
+                  <div className="metric-label">Tracked auth cookies</div>
+                  <div className="metric-value">
+                    {info.trackedPresentCount}/{info.trackedExpectedCount || "—"}
+                  </div>
+                </div>
+              </div>
+
               <div className="section-header">Stored Cookies</div>
               <div className="cookie-grid">
                 {info.presentKeys.map((key) => (

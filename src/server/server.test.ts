@@ -201,10 +201,13 @@ describe("AppServer", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({
         exists: false,
+        updatedAt: null,
         cookies: {},
         tld: null,
         region: null,
         presentKeys: [],
+        trackedPresentCount: 0,
+        trackedExpectedCount: 0,
         missingKeys: [],
       });
     });
@@ -492,9 +495,12 @@ describe("AppServer", () => {
       expect(res.json()).toMatchObject({
         saved: true,
         exists: true,
+        updatedAt: expect.any(String),
         tld: "com",
         region: "US",
         presentKeys: ["session-id", "ubid-main", "at-main"],
+        trackedPresentCount: 3,
+        trackedExpectedCount: 8,
         missingKeys: [
           "x-main",
           "sess-at-main",

@@ -8,7 +8,10 @@ import {
   parseCookieString,
 } from "../../amazon/cookies.js";
 
-export function buildCookieResponse(cookies: Record<string, string>) {
+export function buildCookieResponse(
+  cookies: Record<string, string>,
+  options: { updatedAt?: string | null } = {},
+) {
   const tld = detectTld(cookies);
   const masked: Record<string, string> = {};
   for (const [key, value] of Object.entries(cookies)) {
@@ -20,10 +23,13 @@ export function buildCookieResponse(cookies: Record<string, string>) {
 
   return {
     exists: true,
+    updatedAt: options.updatedAt ?? null,
     cookies: masked,
     tld,
     region: tld === "com" ? "US" : tld ? `amazon.${tld}` : null,
     presentKeys,
+    trackedPresentCount: presentKeys.length,
+    trackedExpectedCount: allExpected.length,
     missingKeys: allExpected.filter((key) => !cookies[key]),
   };
 }
@@ -31,6 +37,13 @@ export function buildCookieResponse(cookies: Record<string, string>) {
 export async function readCookiesFile(cookiesPath: string) {
   const raw = await fs.readFile(cookiesPath, "utf-8");
   return JSON.parse(raw) as Record<string, string>;
+}
+
+export async function readCookiesFileUpdatedAt(
+  cookiesPath: string,
+): Promise<string> {
+  const stat = await fs.stat(cookiesPath);
+  return stat.mtime.toISOString();
 }
 
 export async function saveCookiesFile(
