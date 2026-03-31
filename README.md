@@ -52,15 +52,20 @@ The sync service authenticates to Amazon Photos via cookies (no passwords stored
 
 1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
 2. Open the app's **Amazon Cookies** page (`/cookies`)
-3. Paste either:
+3. Capture cookies from your browser using one of these sources:
+   - **Preferred:** the browser's current cookie store for `www.amazon.com`
+   - **Also supported:** a full `Cookie` request header string from an Amazon Photos request
+4. Paste either:
    - a full `Cookie` header string from your browser, or
    - a JSON object of cookie key/value pairs
-4. The app extracts and stores the Amazon auth cookies it needs:
+5. The app extracts and stores the Amazon auth cookies it needs:
    - **US**: required `session-id`, `ubid-main`, `at-main`
      - optional `x-main`, `sess-at-main`, `sst-main`, `session-token`, `session-id-time`
    - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}`
      - optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}`, `session-token`, `session-id-time`
-5. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
+6. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
+
+> **Why the browser cookie store is preferred:** request headers can be slightly stale if Amazon rotates auth cookies in the response (for example, `Set-Cookie: session-token=...` on page load). The service now persists tracked response-cookie rotations automatically, but for initial manual capture the browser's current cookie jar is the safer source of truth.
 
 > **Note:** Cookies expire periodically. Re-save them in the web UI when
 > the sync service reports an authentication error.
@@ -357,6 +362,7 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
   - Save cookies from either form:
     - `{ "cookieString": "..." }`
     - `{ "cookies": { "key": "value" } }`
+  - Prefers browser-cookie-store values when available; request-header values are accepted too
   - Calls optional post-save hook used by the sync service
   - Response: `{ saved: true, ...cookieState }`
   - Example:
@@ -452,7 +458,11 @@ UPLOAD_DELAY_MS=1000
 
 ### Amazon Cookies Expired
 
-The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*`, `session-token`, and `session-id-time` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire. If automatic refresh fails, the service will send an alert (if notifications are configured) and you'll need to update cookies in the Alexa Photos web UI.
+The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*`, `session-token`, and `session-id-time` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire.
+
+In addition, when Amazon responses include tracked auth cookies via HTTP `Set-Cookie` headers, the service selectively persists those rotated values back to `AMAZON_COOKIES_PATH`. This keeps the saved cookie file aligned with the live session more like a normal browser cookie jar.
+
+If automatic refresh still fails, the service will send an alert (if notifications are configured) and you'll need to update cookies in the Alexa Photos web UI.
 
 To disable automatic refresh, set `AMAZON_AUTO_REFRESH_COOKIES=false` in your `.env` file.
 

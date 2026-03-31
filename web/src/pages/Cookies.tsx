@@ -222,9 +222,9 @@ export default function Cookies() {
       {pasteMode ? (
         <div>
           <p className="inline-muted">
-            Paste the current Amazon Photos cookie string from your browser.
-            Include `session-id`, `ubid-main`, `at-main`, and any available
-            refresh cookies.
+            Preferred source: your browser's current cookie store for
+            `www.amazon.com`. A full Amazon Photos request `Cookie` header also
+            works, but the live browser cookie jar is less likely to be stale.
           </p>
           <textarea
             className="cookie-paste"
