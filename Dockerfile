@@ -1,27 +1,18 @@
 # Multi-stage build for alexa-photos sync service
 
-# Stage 1: Build frontend (React)
-FROM node:25-slim AS web-builder
-
-WORKDIR /app/web
-
-COPY web/package*.json ./
-RUN npm ci
-
-COPY web/ ./
-RUN npm run build
-
-# Stage 2: Build backend (TypeScript)
+# Stage 1: Build workspace packages
 FROM node:25-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
+COPY server/package*.json ./server/
+COPY web/package*.json ./web/
 RUN npm ci
 
-COPY src/ ./src/
-COPY tsconfig.json ./
-RUN npm run build
+COPY server/ ./server/
+COPY web/ ./web/
+RUN npm run build -w server && npm run build -w web
 
 # Stage 3: Runtime
 FROM node:25-slim
@@ -33,17 +24,19 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy package files
+# Copy workspace package files
 COPY package*.json ./
+COPY server/package*.json ./server/
+COPY web/package*.json ./web/
 
-# Install production dependencies only
+# Install production workspace dependencies
 RUN npm ci --omit=dev
 
 # Copy compiled backend from builder
-COPY --from=builder /app/dist/ ./dist/
+COPY --from=builder /app/server/dist/ ./server/dist/
 
 # Copy compiled frontend from web-builder
-COPY --from=web-builder /app/web/dist/ ./web/dist/
+COPY --from=builder /app/web/dist/ ./web/dist/
 
 # Create data directory (host should mount volume here)
 RUN mkdir -p /app/data
@@ -58,4 +51,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 CMD [ "curl", "-s", "http://localhost:3000/health" ]
 
 # Start the application
-CMD ["node", "dist/index.js"]
+CMD ["node", "server/dist/index.js"]

@@ -50,6 +50,12 @@ Uses the Amazon Photos REST API (no browser required).
 
 The sync service authenticates to Amazon Photos via cookies (no passwords stored).
 
+Project layout:
+
+- `server/` — backend sync service and API
+- `web/` — React + Vite admin UI
+- repo root — workspace orchestration (`npm run ...` from root still works)
+
 1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
 2. Open the app's **Amazon Cookies** page (`/cookies`)
 3. Capture cookies from your browser using one of these sources:
@@ -109,7 +115,6 @@ docker compose logs -f
 | ---------------------------- | -------------------------------- |
 | `npm run dev`                | Start sync service in watch mode |
 | `npm run build`              | Build backend for production     |
-| `npm run web:install`        | Install frontend dependencies     |
 | `npm run web:dev`            | Start React UI (Vite dev server) |
 | `npm run web:build`          | Build React UI for production     |
 | `npm run start`              | Run production build             |
@@ -428,7 +433,7 @@ A web-based admin interface is available at `http://localhost:3000/`. Use it to:
 - View and manage Amazon authentication cookies
 - Test current cookie auth status against Amazon
 
-The frontend now lives in `web/` (React + Vite), and production assets are served by the backend from `web/dist`.
+The frontend lives in `web/` (React + Vite), the backend lives in `server/`, and production assets are served by the backend from `web/dist`.
 
 ## Tips & Advanced Usage
 

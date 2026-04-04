@@ -1,6 +1,7 @@
 {
-  "name": "alexa-photos-workspace",
+  "name": "alexa-photos",
   "private": true,
+  "version": "1.0.11",
   "workspaces": ["server", "web"],
   "scripts": {
     "dev": "npm run dev -w server",
