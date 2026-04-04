@@ -22,7 +22,7 @@ export class AppServer {
         options.staticDir ??
         path.resolve(
           path.dirname(new URL(import.meta.url).pathname),
-          "../../web/dist",
+          "../../../web/dist",
         ),
       metrics: {
         status: "starting",

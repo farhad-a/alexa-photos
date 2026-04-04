@@ -2,8 +2,8 @@
 /**
  * Manual test script for notification system
  * Usage:
- *   ALERT_WEBHOOK_URL=https://webhook.site/... node --loader ts-node/esm src/lib/test-notifications.ts
- *   PUSHOVER_TOKEN=xxx PUSHOVER_USER=yyy node --loader ts-node/esm src/lib/test-notifications.ts
+ *   ALERT_WEBHOOK_URL=https://webhook.site/... node --loader ts-node/esm server/src/lib/test-notifications.ts
+ *   PUSHOVER_TOKEN=xxx PUSHOVER_USER=yyy node --loader ts-node/esm server/src/lib/test-notifications.ts
  */
 
 import { NotificationService } from "./notifications.js";

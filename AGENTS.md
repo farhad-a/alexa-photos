@@ -8,7 +8,7 @@ A polling-based sync service that mirrors an iCloud shared album to Amazon Photo
 **State tracking**: SQLite maintains `icloud_id ↔ amazon_id` mappings
 
 ```
-src/
+server/src/
 ├── icloud/client.ts      # iCloud shared album public API (no auth)
 ├── amazon/client.ts      # Amazon Photos REST API (cookie-based auth)
 ├── sync/engine.ts        # Orchestrates diff detection and sync operations
@@ -35,7 +35,7 @@ web/
 ## Key Patterns & Conventions
 
 ### Configuration
-- **All config via environment variables**, validated with **Zod** in [src/lib/config.ts](src/lib/config.ts)
+- **All config via environment variables**, validated with **Zod** in [server/src/lib/config.ts](server/src/lib/config.ts)
 - Use `z.coerce` for numbers from env vars
 - Export singleton `config` object, not factory functions
 
@@ -48,19 +48,19 @@ web/
 
 ### Notifications
 - Optional alerting via `ALERT_WEBHOOK_URL` or `PUSHOVER_TOKEN`/`PUSHOVER_USER`
-- Implementation in [src/lib/notifications.ts](src/lib/notifications.ts)
+- Implementation in [server/src/lib/notifications.ts](server/src/lib/notifications.ts)
 - **Throttling**: Duplicate alerts throttled to 1 per hour (prevents spam on repeated errors)
 - Cookie refresh failures trigger alerts via callback from SyncEngine → AmazonClient
 
 ## Platform Clients
 
-### ICloudClient ([src/icloud/client.ts](src/icloud/client.ts))
+### ICloudClient ([server/src/icloud/client.ts](server/src/icloud/client.ts))
 - **Auth**: None — uses public shared album API
 - **Partition discovery**: POST to `p01-sharedstreams.icloud.com`, follow 330 redirect via `X-Apple-MMe-Host` header
 - **Date parsing**: Handles both ISO strings and Apple epoch (seconds since 2001-01-01)
 - **Retry logic**: Exponential backoff with jitter for downloads (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`, default: 3)
 
-### AmazonClient ([src/amazon/client.ts](src/amazon/client.ts))
+### AmazonClient ([server/src/amazon/client.ts](server/src/amazon/client.ts))
 - **Auth**: Cookie-based — cookies stored in `./data/amazon-cookies.json`
 - **Ported from**: [trevorhobenshield/amazon_photos](https://github.com/trevorhobenshield/amazon_photos) Python library
 - **Base URL**: `https://www.amazon.{tld}/drive/v1`
@@ -71,7 +71,7 @@ web/
 - **Optional US cookies**: `x-main`, `sess-at-main`, `sst-main` (improve refresh reliability)
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
-### SyncEngine ([src/sync/engine.ts](src/sync/engine.ts))
+### SyncEngine ([server/src/sync/engine.ts](server/src/sync/engine.ts))
 - **Dependency injection**: Accepts `StateStore` via constructor — shared with `AppServer` for admin APIs
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
 - **Additions**: Check checksum for existing content → if found, reuse Amazon node + add to album → else download → upload → add to album → save mapping
@@ -86,7 +86,7 @@ web/
 - **Sync summary**: "Sync complete" log includes `{ durationMs, photosAdded, photosFailed, photosRemoved }`
 - **No resync on external delete**: If a photo is deleted from Amazon Photos directly, the mapping still exists — the engine skips it. Delete the mapping via the admin UI to force a resync
 
-### StateStore ([src/state/store.ts](src/state/store.ts))
+### StateStore ([server/src/state/store.ts](server/src/state/store.ts))
 - **SQLite** via `better-sqlite3`
 - **Shared singleton**: Created in `index.ts`, injected into both `SyncEngine` and `AppServer`
 - **Table**: `photo_mappings` (icloud_id PK, icloud_checksum, amazon_id, synced_at)

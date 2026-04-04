@@ -2,7 +2,7 @@
 
 ## Creating a New Release
 
-1. **Update version** in `package.json`:
+1. **Update version** in `package.json` and `server/package.json`:
 
    ```bash
    npm version patch  # or minor, or major
@@ -11,7 +11,7 @@
 2. **Commit and push** the version change:
 
    ```bash
-   git add package.json package-lock.json
+   git add package.json server/package.json package-lock.json
    git commit -m "Bump version to v1.0.1"
    git push
    ```
