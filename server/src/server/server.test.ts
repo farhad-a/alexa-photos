@@ -197,6 +197,8 @@ describe("AppServer", () => {
       expect(res.json()).toMatchObject({
         totalSyncs: expect.any(Number),
         totalErrors: expect.any(Number),
+        totalPhotosAdded: expect.any(Number),
+        totalPhotosRemoved: expect.any(Number),
       });
     });
 

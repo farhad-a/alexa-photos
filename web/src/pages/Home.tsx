@@ -17,6 +17,8 @@ interface Metrics {
   uptime: number;
   totalSyncs: number;
   totalErrors: number;
+  totalPhotosAdded: number;
+  totalPhotosRemoved: number;
   amazonAuthenticated: boolean;
   lastSync?: LastSync;
   nextSync?: string;
@@ -130,6 +132,16 @@ export default function Home() {
         <div className="metric-tile">
           <div className="metric-label">Total errors</div>
           <div className="metric-value">{metrics?.totalErrors ?? "—"}</div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-label">Total added</div>
+          <div className="metric-value">{metrics?.totalPhotosAdded ?? "—"}</div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-label">Total deleted</div>
+          <div className="metric-value">
+            {metrics?.totalPhotosRemoved ?? "—"}
+          </div>
         </div>
         <div className="metric-tile">
           <div className="metric-label">Success rate</div>

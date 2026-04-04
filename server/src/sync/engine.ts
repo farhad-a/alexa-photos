@@ -18,6 +18,8 @@ export interface SyncMetrics {
   };
   totalSyncs: number;
   totalErrors: number;
+  totalPhotosAdded: number;
+  totalPhotosRemoved: number;
   amazonAuthenticated: boolean;
   amazonAuthStatus?: AmazonAuthStatus["state"];
   amazonAuthLastStatusCode?: number;
@@ -42,6 +44,8 @@ export class SyncEngine {
   private metrics: SyncMetrics = {
     totalSyncs: 0,
     totalErrors: 0,
+    totalPhotosAdded: 0,
+    totalPhotosRemoved: 0,
     amazonAuthenticated: false,
     amazonAuth401Count: 0,
     amazonRateLimit429Count: 0,
@@ -165,6 +169,8 @@ export class SyncEngine {
         success: true,
       };
       this.metrics.totalSyncs++;
+      this.metrics.totalPhotosAdded += photosAdded;
+      this.metrics.totalPhotosRemoved += photosRemoved;
 
       // Send summary notification when something changed or failed.
       if (photosAdded > 0 || photosRemoved > 0 || photosFailed > 0) {
@@ -204,6 +210,8 @@ export class SyncEngine {
         error: error instanceof Error ? error.message : String(error),
       };
       this.metrics.totalErrors++;
+      this.metrics.totalPhotosAdded += photosAdded;
+      this.metrics.totalPhotosRemoved += photosRemoved;
 
       throw error;
     } finally {
