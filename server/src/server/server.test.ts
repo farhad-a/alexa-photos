@@ -169,7 +169,16 @@ describe("AppServer", () => {
     let server: AppServer;
 
     beforeEach(() => {
-      server = new AppServer({ port: 0, staticDir: "/nonexistent" });
+      server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        cookiesPath: path.join(
+          os.tmpdir(),
+          `alexa-photos-missing-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}.json`,
+        ),
+      });
     });
 
     it("GET /health returns health status", async () => {
