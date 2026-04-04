@@ -707,6 +707,24 @@ describe("SyncEngine", () => {
       engine.setAmazonAuthenticated(false);
       expect(engine.getMetrics().amazonAuthenticated).toBe(false);
     });
+
+    it("tracks cumulative added and removed photo totals across runs", async () => {
+      vi.spyOn(icloud, "getPhotos")
+        .mockResolvedValueOnce([makePhoto("p1"), makePhoto("p2")])
+        .mockResolvedValueOnce([makePhoto("p2")]);
+
+      await engine.run();
+      expect(engine.getMetrics()).toMatchObject({
+        totalPhotosAdded: 2,
+        totalPhotosRemoved: 0,
+      });
+
+      await engine.run();
+      expect(engine.getMetrics()).toMatchObject({
+        totalPhotosAdded: 2,
+        totalPhotosRemoved: 1,
+      });
+    });
   });
 
   describe("error handling", () => {

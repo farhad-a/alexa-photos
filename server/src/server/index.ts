@@ -29,6 +29,8 @@ export class AppServer {
         uptime: 0,
         totalSyncs: 0,
         totalErrors: 0,
+        totalPhotosAdded: 0,
+        totalPhotosRemoved: 0,
         amazonAuthenticated: false,
         amazonAuth401Count: 0,
         amazonRateLimit429Count: 0,
