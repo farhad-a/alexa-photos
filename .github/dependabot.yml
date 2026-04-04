@@ -32,6 +32,22 @@ updates:
         update-types:
           - patch
 
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 25
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - patch
+
   - package-ecosystem: docker
     directory: /
     schedule:
