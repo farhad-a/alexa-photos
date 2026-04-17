@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs/promises";
 import { AmazonClient, AmazonCookies } from "./client.js";
+import type { NotificationService } from "../lib/notifications.js";
+
+function makeMockNotificationService(): {
+  service: NotificationService;
+  sendAlert: ReturnType<typeof vi.fn>;
+  clearAlertThrottle: ReturnType<typeof vi.fn>;
+} {
+  const sendAlert = vi.fn();
+  const clearAlertThrottle = vi.fn();
+  return {
+    service: {
+      sendAlert,
+      clearAlertThrottle,
+    } as unknown as NotificationService,
+    sendAlert,
+    clearAlertThrottle,
+  };
+}
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -821,16 +839,17 @@ describe("AmazonClient", () => {
         json: async () => ({ success: true }),
       });
 
-      const notificationCallback = vi.fn();
+      const { service: notificationService, sendAlert } =
+        makeMockNotificationService();
       const client = new AmazonClient(makeUsCookies(), {
         autoRefresh: true,
         cookiesPath: "/tmp/test-cookies.json",
-        notificationCallback,
+        notificationService,
       });
 
       await client["request"]("GET", "https://www.amazon.com/drive/v1/nodes");
 
-      expect(notificationCallback).toHaveBeenCalledWith(
+      expect(sendAlert).toHaveBeenCalledWith(
         "Amazon Photos cookies refreshed successfully",
         "info",
       );
@@ -851,21 +870,22 @@ describe("AmazonClient", () => {
         json: async () => ({ account: "ok" }),
       });
 
-      const notificationCallback = vi.fn();
+      const { service: notificationService, sendAlert } =
+        makeMockNotificationService();
       const client = new AmazonClient(makeUsCookies(), {
         autoRefresh: true,
         cookiesPath: "/tmp/test-cookies.json",
-        notificationCallback,
+        notificationService,
       });
 
       const ok = await client.refreshNow();
       expect(ok).toBe(false);
 
-      expect(notificationCallback).toHaveBeenCalledWith(
+      expect(sendAlert).toHaveBeenCalledWith(
         "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
         "warning",
       );
-      expect(notificationCallback).not.toHaveBeenCalledWith(
+      expect(sendAlert).not.toHaveBeenCalledWith(
         "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
         "error",
       );
@@ -886,21 +906,22 @@ describe("AmazonClient", () => {
         json: async () => ({ account: "ok" }),
       });
 
-      const notificationCallback = vi.fn();
+      const { service: notificationService, sendAlert } =
+        makeMockNotificationService();
       const client = new AmazonClient(makeUsCookies(), {
         autoRefresh: true,
         cookiesPath: "/tmp/test-cookies.json",
-        notificationCallback,
+        notificationService,
       });
 
       const ok = await client.refreshNow({ notifyOnNonAuthFailure: false });
       expect(ok).toBe(false);
 
-      expect(notificationCallback).not.toHaveBeenCalledWith(
+      expect(sendAlert).not.toHaveBeenCalledWith(
         "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
         "warning",
       );
-      expect(notificationCallback).not.toHaveBeenCalledWith(
+      expect(sendAlert).not.toHaveBeenCalledWith(
         "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
         "warning",
       );
@@ -917,25 +938,26 @@ describe("AmazonClient", () => {
       // Follow-up auth check is inconclusive (network/transient bucket)
       mockFetch.mockRejectedValueOnce(new Error("network down"));
 
-      const notificationCallback = vi.fn();
+      const { service: notificationService, sendAlert } =
+        makeMockNotificationService();
       const client = new AmazonClient(makeUsCookies(), {
         autoRefresh: true,
         cookiesPath: "/tmp/test-cookies.json",
-        notificationCallback,
+        notificationService,
       });
 
       const ok = await client.refreshNow();
       expect(ok).toBe(false);
 
-      expect(notificationCallback).toHaveBeenCalledWith(
+      expect(sendAlert).toHaveBeenCalledWith(
         "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
         "warning",
       );
-      expect(notificationCallback).not.toHaveBeenCalledWith(
+      expect(sendAlert).not.toHaveBeenCalledWith(
         "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
         "warning",
       );
-      expect(notificationCallback).not.toHaveBeenCalledWith(
+      expect(sendAlert).not.toHaveBeenCalledWith(
         "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
         "error",
       );
@@ -956,17 +978,18 @@ describe("AmazonClient", () => {
         text: async () => "Unauthorized",
       });
 
-      const notificationCallback = vi.fn();
+      const { service: notificationService, sendAlert } =
+        makeMockNotificationService();
       const client = new AmazonClient(makeUsCookies(), {
         autoRefresh: true,
         cookiesPath: "/tmp/test-cookies.json",
-        notificationCallback,
+        notificationService,
       });
 
       const ok = await client.refreshNow();
       expect(ok).toBe(false);
 
-      expect(notificationCallback).toHaveBeenCalledWith(
+      expect(sendAlert).toHaveBeenCalledWith(
         "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
         "error",
       );

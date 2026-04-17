@@ -36,7 +36,6 @@ async function main() {
     amazon = await AmazonClient.fromFile(
       config.amazonCookiesPath,
       config.amazonAutoRefreshCookies,
-      (message, level) => notifications.sendAlert(message, level),
       notifications,
     );
   } catch (error) {

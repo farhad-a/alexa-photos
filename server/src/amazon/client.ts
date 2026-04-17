@@ -17,10 +17,6 @@ import {
   classifyAmazonAuthResponse,
 } from "../lib/provider-errors.js";
 
-export interface NotificationCallback {
-  (message: string, level: "error" | "warning" | "info"): Promise<void>;
-}
-
 /**
  * Amazon Photos REST API client
  *
@@ -98,7 +94,6 @@ export class AmazonClient {
   private rootNodeId: string | null = null;
   private cookiesPath: string;
   private autoRefresh: boolean;
-  private notificationCallback?: NotificationCallback;
   private notificationService?: NotificationService;
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -107,7 +102,6 @@ export class AmazonClient {
     options: {
       cookiesPath?: string;
       autoRefresh?: boolean;
-      notificationCallback?: NotificationCallback;
       notificationService?: NotificationService;
     } = {},
   ) {
@@ -118,7 +112,6 @@ export class AmazonClient {
     this.sessionId = cookies["session-id"];
     this.cookiesPath = options.cookiesPath || COOKIES_PATH;
     this.autoRefresh = options.autoRefresh ?? true;
-    this.notificationCallback = options.notificationCallback;
     this.notificationService = options.notificationService;
     this.baseParams = {
       asset: "ALL",
@@ -146,7 +139,6 @@ export class AmazonClient {
   static async fromFile(
     cookiePath = COOKIES_PATH,
     autoRefresh = true,
-    notificationCallback?: NotificationCallback,
     notificationService?: NotificationService,
   ): Promise<AmazonClient> {
     logger.debug({ path: cookiePath }, "Loading cookies from file");
@@ -159,7 +151,6 @@ export class AmazonClient {
     return new AmazonClient(cookies, {
       cookiesPath: cookiePath,
       autoRefresh,
-      notificationCallback,
       notificationService,
     });
   }
@@ -403,18 +394,18 @@ export class AmazonClient {
         const authStatus = await this.checkAuthStatus().catch(() => null);
 
         if (authStatus?.state === "unauthorized") {
-          await this.notificationCallback?.(
+          await this.notificationService?.sendAlert(
             "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
             "error",
           );
         } else if (options?.notifyOnNonAuthFailure !== false) {
           if (authStatus?.ok) {
-            await this.notificationCallback?.(
+            await this.notificationService?.sendAlert(
               "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
               "warning",
             );
           } else {
-            await this.notificationCallback?.(
+            await this.notificationService?.sendAlert(
               "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
               "warning",
             );
@@ -478,7 +469,7 @@ export class AmazonClient {
         "error",
       );
 
-      await this.notificationCallback?.(
+      await this.notificationService?.sendAlert(
         "Amazon Photos cookies refreshed successfully",
         "info",
       );

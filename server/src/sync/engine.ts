@@ -269,7 +269,6 @@ export class SyncEngine {
         this.amazon = await AmazonClient.fromFile(
           config.amazonCookiesPath,
           config.amazonAutoRefreshCookies,
-          (message, level) => this.notifications.sendAlert(message, level),
           this.notifications,
         );
         this.startRefreshIntervalIfNeeded();
@@ -419,7 +418,6 @@ export class SyncEngine {
       this.amazon = await AmazonClient.fromFile(
         config.amazonCookiesPath,
         config.amazonAutoRefreshCookies,
-        (message, level) => this.notifications.sendAlert(message, level),
         this.notifications,
       );
       this.startRefreshIntervalIfNeeded();
