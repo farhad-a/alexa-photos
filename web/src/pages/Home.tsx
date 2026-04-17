@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getJson } from "../lib/api";
-import { METRICS_REFRESH_EVENT } from "../lib/events";
+import { ApiError, getJson, postJson } from "../lib/api";
+import { METRICS_REFRESH_EVENT, requestMetricsRefresh } from "../lib/events";
+import { useToast } from "../components/Toast";
 
 interface LastSync {
   timestamp: string;
@@ -35,9 +36,11 @@ function formatUptime(ms: number): string {
 }
 
 export default function Home() {
+  const { showToast } = useToast();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -84,6 +87,26 @@ export default function Home() {
     };
   }, [fetchMetrics]);
 
+  const triggerSync = async () => {
+    setSyncing(true);
+    try {
+      await postJson("/api/sync");
+      showToast("Sync started", "success");
+      setTimeout(() => requestMetricsRefresh("manual-sync"), 1500);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        showToast("Sync already in progress", "success");
+      } else {
+        showToast(
+          err instanceof Error ? err.message : "Failed to start sync",
+          "error",
+        );
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const successRate = useMemo(() => {
     if (!metrics || metrics.totalSyncs === 0) return "—";
     const ok = metrics.totalSyncs - metrics.totalErrors;
@@ -117,6 +140,16 @@ export default function Home() {
       </div>
 
       {error && <div className="home-error">Metrics unavailable: {error}</div>}
+
+      <div className="toolbar">
+        <button
+          className="btn btn-primary"
+          onClick={() => void triggerSync()}
+          disabled={syncing}
+        >
+          {syncing ? "Starting..." : "Sync Now"}
+        </button>
+      </div>
 
       <div className="home-metrics-grid">
         <div className="metric-tile">

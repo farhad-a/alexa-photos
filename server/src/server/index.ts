@@ -18,6 +18,8 @@ export class AppServer {
       startTime: new Date(),
       onAmazonAuthChecked: options.onAmazonAuthChecked,
       onCookiesSaved: options.onCookiesSaved,
+      onSyncRequested: options.onSyncRequested,
+      isSyncRunning: options.isSyncRunning,
       staticDir:
         options.staticDir ??
         path.resolve(

@@ -12,6 +12,7 @@ import {
   handleSaveCookies,
   handleTestCookies,
 } from "./controllers/cookies.js";
+import { handleTriggerSync } from "./controllers/sync.js";
 import { serveStaticFile } from "./static.js";
 import { AppRequestContext } from "./types.js";
 
@@ -58,6 +59,11 @@ export async function handleAppRequest(
         handleDeleteMapping(context, urlPath, res);
         return;
       }
+    }
+
+    if (urlPath === "/api/sync" && req.method === "POST") {
+      handleTriggerSync(context, res);
+      return;
     }
 
     if (urlPath === "/api/cookies" && req.method === "GET") {
