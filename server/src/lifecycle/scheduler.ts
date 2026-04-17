@@ -23,11 +23,26 @@ export function createSyncScheduler(options: {
   let consecutiveAuthFailures = 0;
   let intervalId: ReturnType<typeof setInterval> | undefined;
 
-  const runSyncWithMetrics = async () => {
-    const nextSync = new Date(Date.now() + pollIntervalMs);
+  const syncHealthMetrics = (status: "healthy" | "unhealthy") => {
+    const metrics = sync.getMetrics();
+    health.updateMetrics({
+      status,
+      ...metrics,
+    });
+  };
+
+  const logNextSync = () => {
+    logger.info(
+      { nextSyncInSeconds: pollIntervalSeconds },
+      "Next sync scheduled",
+    );
+  };
+
+  const runSyncAndUpdateMetrics = async (): Promise<
+    "healthy" | "unhealthy"
+  > => {
     try {
       await sync.run();
-      sync.setNextSync(nextSync);
       const metrics = sync.getMetrics();
 
       if (metrics.amazonAuthenticated) {
@@ -43,26 +58,31 @@ export function createSyncScheduler(options: {
             ? "healthy"
             : "unhealthy";
 
-      health.updateMetrics({
-        status,
-        ...metrics,
-      });
+      syncHealthMetrics(status);
+      return status;
     } catch {
-      sync.setNextSync(nextSync);
-      const metrics = sync.getMetrics();
-      health.updateMetrics({ status: "unhealthy", ...metrics });
+      syncHealthMetrics("unhealthy");
+      return "unhealthy";
     }
+  };
 
-    logger.info(
-      { nextSyncInSeconds: pollIntervalSeconds },
-      "Next sync scheduled",
-    );
+  const runScheduledSyncWithMetrics = async () => {
+    sync.setNextSync(new Date(Date.now() + pollIntervalMs));
+    await runSyncAndUpdateMetrics();
+    logNextSync();
+  };
+
+  const runManualSyncWithMetrics = async () => {
+    await runSyncAndUpdateMetrics();
   };
 
   return {
     async start(): Promise<void> {
-      await runSyncWithMetrics();
-      intervalId = schedule(runSyncWithMetrics, pollIntervalMs);
+      const status = await runSyncAndUpdateMetrics();
+      sync.setNextSync(new Date(Date.now() + pollIntervalMs));
+      syncHealthMetrics(status);
+      logNextSync();
+      intervalId = schedule(runScheduledSyncWithMetrics, pollIntervalMs);
     },
     stop(): void {
       if (intervalId) {
@@ -70,6 +90,7 @@ export function createSyncScheduler(options: {
         intervalId = undefined;
       }
     },
-    runSyncWithMetrics,
+    runManualSyncWithMetrics,
+    runScheduledSyncWithMetrics,
   };
 }

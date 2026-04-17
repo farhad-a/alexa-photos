@@ -2,7 +2,12 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 import * as path from "path";
 import { logger as rootLogger } from "../lib/logger.js";
 import { handleAppRequest } from "./router.js";
-import { AppRequestContext, AppServerOptions, HealthMetrics } from "./types.js";
+import {
+  AppRequestContext,
+  AppServerOptions,
+  HealthMetrics,
+  SyncControls,
+} from "./types.js";
 
 const logger = rootLogger.child({ component: "server" });
 
@@ -55,6 +60,11 @@ export class AppServer {
 
   updateMetrics(metrics: Partial<HealthMetrics>): void {
     this.context.metrics = { ...this.context.metrics, ...metrics };
+  }
+
+  setSyncControls(controls: SyncControls): void {
+    this.context.onSyncRequested = controls.onSyncRequested;
+    this.context.isSyncRunning = controls.isSyncRunning;
   }
 
   start(): Promise<void> {
