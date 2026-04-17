@@ -17,6 +17,11 @@ export interface AppServerOptions {
   isSyncRunning?: () => boolean;
 }
 
+export interface SyncControls {
+  onSyncRequested?: () => void | Promise<void>;
+  isSyncRunning?: () => boolean;
+}
+
 export interface AppRequestContext {
   port: number;
   startTime: Date;

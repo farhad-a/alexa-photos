@@ -613,6 +613,29 @@ describe("AppServer", () => {
   });
 
   describe("POST /api/sync", () => {
+    it("returns 503 until sync controls are configured on the same server instance", async () => {
+      const onSyncRequested = vi.fn().mockResolvedValue(undefined);
+      const isSyncRunning = vi.fn().mockReturnValue(false);
+      const server = new AppServer({ port: 0, staticDir: "/nonexistent" });
+
+      const before = await request(server, {
+        method: "POST",
+        url: "/api/sync",
+      });
+      expect(before.statusCode).toBe(503);
+      expect(before.json()).toEqual({ error: "Sync trigger not configured" });
+
+      server.setSyncControls({ onSyncRequested, isSyncRunning });
+
+      const after = await request(server, { method: "POST", url: "/api/sync" });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(after.statusCode).toBe(202);
+      expect(after.json()).toEqual({ triggered: true });
+      expect(isSyncRunning).toHaveBeenCalledTimes(1);
+      expect(onSyncRequested).toHaveBeenCalledTimes(1);
+    });
+
     it("triggers a sync when idle and returns 202", async () => {
       const onSyncRequested = vi.fn().mockResolvedValue(undefined);
       const isSyncRunning = vi.fn().mockReturnValue(false);
