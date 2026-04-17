@@ -239,3 +239,6 @@ $RECYCLE.BIN/
 # Data (state + sessions)
 data/
 !data/.gitkeep
+
+# Claude
+.claude/
