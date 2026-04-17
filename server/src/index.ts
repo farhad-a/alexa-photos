@@ -56,6 +56,8 @@ async function main() {
 
   const sync = new SyncEngine(icloud, state, amazon);
 
+  let manualSyncTrigger: () => Promise<void> = async () => {};
+
   // Start app server (health, API, admin UI)
   const health = new AppServer({
     port: config.serverPort,
@@ -75,6 +77,8 @@ async function main() {
         amazonAuthenticated: false,
       });
     },
+    onSyncRequested: () => manualSyncTrigger(),
+    isSyncRunning: () => sync.isSyncRunning(),
   });
 
   await runStartupSequence({
@@ -93,6 +97,7 @@ async function main() {
     health,
     pollIntervalMs: config.pollIntervalMs,
   });
+  manualSyncTrigger = () => scheduler.runSyncWithMetrics();
   await scheduler.start();
 }
 

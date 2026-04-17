@@ -66,6 +66,10 @@ export class SyncEngine {
     return { ...this.metrics };
   }
 
+  isSyncRunning(): boolean {
+    return this.isRunning;
+  }
+
   async run(): Promise<void> {
     if (this.isRunning) {
       logger.warn("Sync already in progress, skipping");

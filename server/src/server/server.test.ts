@@ -611,4 +611,51 @@ describe("AppServer", () => {
       });
     });
   });
+
+  describe("POST /api/sync", () => {
+    it("triggers a sync when idle and returns 202", async () => {
+      const onSyncRequested = vi.fn().mockResolvedValue(undefined);
+      const isSyncRunning = vi.fn().mockReturnValue(false);
+      const server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        onSyncRequested,
+        isSyncRunning,
+      });
+
+      const res = await request(server, { method: "POST", url: "/api/sync" });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(res.statusCode).toBe(202);
+      expect(res.json()).toEqual({ triggered: true });
+      expect(isSyncRunning).toHaveBeenCalledTimes(1);
+      expect(onSyncRequested).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 409 when a sync is already running and does not invoke trigger", async () => {
+      const onSyncRequested = vi.fn();
+      const isSyncRunning = vi.fn().mockReturnValue(true);
+      const server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        onSyncRequested,
+        isSyncRunning,
+      });
+
+      const res = await request(server, { method: "POST", url: "/api/sync" });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: "Sync already in progress" });
+      expect(onSyncRequested).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when no trigger is configured", async () => {
+      const server = new AppServer({ port: 0, staticDir: "/nonexistent" });
+
+      const res = await request(server, { method: "POST", url: "/api/sync" });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ error: "Sync trigger not configured" });
+    });
+  });
 });

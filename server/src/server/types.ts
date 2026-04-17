@@ -13,6 +13,8 @@ export interface AppServerOptions {
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onCookiesSaved?: () => void | Promise<void>;
+  onSyncRequested?: () => void | Promise<void>;
+  isSyncRunning?: () => boolean;
 }
 
 export interface AppRequestContext {
@@ -24,4 +26,6 @@ export interface AppRequestContext {
   staticDir: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onCookiesSaved?: () => void | Promise<void>;
+  onSyncRequested?: () => void | Promise<void>;
+  isSyncRunning?: () => boolean;
 }
