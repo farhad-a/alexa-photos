@@ -211,6 +211,7 @@ describe("SyncEngine", () => {
           photosRemoved: 0,
           photosFailed: 0,
         }),
+        { skipThrottle: true },
       );
     });
   });

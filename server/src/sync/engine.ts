@@ -195,6 +195,7 @@ export class SyncEngine {
           `Sync complete: ${parts.join(", ")} (${Math.round(durationMs / 1000)}s).`,
           photosFailed > 0 ? "warning" : "info",
           { durationMs, photosAdded, photosRemoved, photosFailed },
+          { skipThrottle: true },
         );
       }
     } catch (error) {

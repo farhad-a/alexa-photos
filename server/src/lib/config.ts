@@ -21,6 +21,10 @@ const configSchema = z.object({
     .number()
     .default(8)
     .transform((h) => h * 60 * 60 * 1000),
+  notificationThrottleMs: z.coerce
+    .number()
+    .default(60)
+    .transform((m) => (m === -1 ? -1 : m * 60 * 1000)),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -41,6 +45,7 @@ function loadConfig(): Config {
     pushoverUser: process.env.PUSHOVER_USER,
     logLevel: process.env.LOG_LEVEL,
     cookieRefreshIntervalMs: process.env.COOKIE_REFRESH_INTERVAL_HOURS,
+    notificationThrottleMs: process.env.NOTIFICATION_THROTTLE_MINUTES,
   });
 }
 

@@ -49,7 +49,7 @@ web/
 ### Notifications
 - Optional alerting via `ALERT_WEBHOOK_URL` or `PUSHOVER_TOKEN`/`PUSHOVER_USER`
 - Implementation in [server/src/lib/notifications.ts](server/src/lib/notifications.ts)
-- **Throttling**: Duplicate alerts throttled to 1 per hour (prevents spam on repeated errors)
+- **Throttling**: Duplicate alerts throttled (default 60 minutes, configurable via `NOTIFICATION_THROTTLE_MINUTES`; `-1` = throttle indefinitely until process restart). Per-call `skipThrottle` bypasses throttling for one-off operational events (e.g. sync summaries)
 - Cookie refresh failures trigger alerts via callback from SyncEngine → AmazonClient
 
 ## Platform Clients

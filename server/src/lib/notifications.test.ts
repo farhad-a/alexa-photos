@@ -30,10 +30,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        1000, // 1 second throttle for testing
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
 
       await service.sendAlert("Test error", "error");
 
@@ -45,10 +45,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        1000, // 1 second throttle
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
 
       // First alert
       await service.sendAlert("Test error", "error");
@@ -64,10 +64,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        100, // 100ms throttle
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 100,
+      });
 
       // First alert
       await service.sendAlert("Test error", "error");
@@ -86,10 +86,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        1000,
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
 
       await service.sendAlert("Error 1", "error");
       await service.sendAlert("Error 2", "error");
@@ -102,10 +102,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        1000,
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
 
       await service.sendAlert("Same message", "error");
       await service.sendAlert("Same message", "warning");
@@ -118,10 +118,10 @@ describe("NotificationService", () => {
         ok: true,
       });
 
-      const service = new NotificationService(
-        { webhookUrl: "https://example.com/webhook" },
-        1000,
-      );
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
 
       // First alert
       await service.sendAlert("Test error", "error");
@@ -131,6 +131,64 @@ describe("NotificationService", () => {
       service.clearAlertThrottle("Test error", "error");
 
       // Second alert (should go through because throttle was cleared)
+      await service.sendAlert("Test error", "error");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("throttles indefinitely when notificationThrottleMs is -1", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+      });
+
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: -1,
+      });
+
+      await service.sendAlert("Test error", "error");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await service.sendAlert("Test error", "error");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("skipThrottle bypasses the throttle window", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+      });
+
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
+
+      await service.sendAlert("Test error", "error", undefined, {
+        skipThrottle: true,
+      });
+      await service.sendAlert("Test error", "error", undefined, {
+        skipThrottle: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("skipThrottle does not poison future throttled sends", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+      });
+
+      const service = new NotificationService({
+        webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 1000,
+      });
+
+      await service.sendAlert("Test error", "error", undefined, {
+        skipThrottle: true,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // A subsequent normal call with the same key should still go through
+      // because the skipThrottle call did not record a sentAlerts entry.
       await service.sendAlert("Test error", "error");
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
@@ -144,6 +202,7 @@ describe("NotificationService", () => {
 
       const service = new NotificationService({
         webhookUrl: "https://example.com/webhook",
+        notificationThrottleMs: 3600000,
       });
 
       await service.sendAlert("Test", "error");
@@ -159,7 +218,9 @@ describe("NotificationService", () => {
     });
 
     it("does not send when webhook not configured", async () => {
-      const service = new NotificationService({});
+      const service = new NotificationService({
+        notificationThrottleMs: 3600000,
+      });
 
       await service.sendAlert("Test", "error");
 
@@ -176,6 +237,7 @@ describe("NotificationService", () => {
       const service = new NotificationService({
         pushoverToken: "test-token",
         pushoverUser: "test-user",
+        notificationThrottleMs: 3600000,
       });
 
       await service.sendAlert("Test", "error");
@@ -200,6 +262,7 @@ describe("NotificationService", () => {
         webhookUrl: "https://example.com/webhook",
         pushoverToken: "test-token",
         pushoverUser: "test-user",
+        notificationThrottleMs: 3600000,
       });
 
       await service.sendAlert("Test", "error");

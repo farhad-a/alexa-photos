@@ -6,6 +6,7 @@ export interface NotificationConfig {
   webhookUrl?: string;
   pushoverToken?: string;
   pushoverUser?: string;
+  notificationThrottleMs: number;
 }
 
 export interface AlertPayload {
@@ -19,11 +20,9 @@ export interface AlertPayload {
 export class NotificationService {
   private config: NotificationConfig;
   private sentAlerts: Map<string, number> = new Map();
-  private throttleMs: number;
 
-  constructor(config: NotificationConfig, throttleMs = 3600000) {
+  constructor(config: NotificationConfig) {
     this.config = config;
-    this.throttleMs = throttleMs; // Default: 1 hour
   }
 
   /**
@@ -40,12 +39,16 @@ export class NotificationService {
     const key = this.getAlertKey(message, level);
     const lastSent = this.sentAlerts.get(key);
 
-    if (!lastSent) {
-      return true; // Never sent before
+    if (lastSent === undefined) {
+      return true;
+    }
+
+    if (this.config.notificationThrottleMs === -1) {
+      return false;
     }
 
     const timeSinceLastSent = Date.now() - lastSent;
-    return timeSinceLastSent >= this.throttleMs;
+    return timeSinceLastSent >= this.config.notificationThrottleMs;
   }
 
   /**
@@ -68,9 +71,11 @@ export class NotificationService {
     message: string,
     level: "error" | "warning" | "info" = "error",
     details?: Record<string, unknown>,
+    options?: { skipThrottle?: boolean },
   ): Promise<void> {
-    // Check if we should throttle this alert
-    if (!this.shouldSendAlert(message, level)) {
+    const skipThrottle = options?.skipThrottle === true;
+
+    if (!skipThrottle && !this.shouldSendAlert(message, level)) {
       logger.debug(
         { message, level },
         "Alert throttled (already sent recently)",
@@ -106,8 +111,9 @@ export class NotificationService {
     // Send all notifications in parallel
     await Promise.allSettled(promises);
 
-    // Mark as sent after successful send
-    this.markAlertSent(message, level);
+    if (!skipThrottle) {
+      this.markAlertSent(message, level);
+    }
   }
 
   private async sendWebhook(payload: AlertPayload): Promise<void> {
