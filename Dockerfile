@@ -1,7 +1,7 @@
 # Multi-stage build for alexa-photos sync service
 
 # Stage 1: Build workspace packages
-FROM node:25-slim AS builder
+FROM node:26-slim AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY web/ ./web/
 RUN npm run build -w server && npm run build -w web
 
 # Stage 3: Runtime
-FROM node:25-slim
+FROM node:26-slim
 
 # Install curl for healthcheck
 RUN apt-get update && \
