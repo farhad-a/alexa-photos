@@ -1,5 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { logger as rootLogger } from "../lib/logger.js";
 import { handleAppRequest } from "./router.js";
 import {
@@ -30,7 +31,10 @@ export class AppServer {
       staticDir:
         options.staticDir ??
         path.resolve(
-          path.dirname(new URL(import.meta.url).pathname),
+          // fileURLToPath, not URL.pathname: the latter percent-encodes, so a
+          // path containing spaces resolves to a directory that does not exist
+          // and every SPA route 404s.
+          path.dirname(fileURLToPath(import.meta.url)),
           "../../../web/dist",
         ),
       metrics: {
