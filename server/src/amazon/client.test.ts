@@ -658,8 +658,7 @@ describe("AmazonClient", () => {
 
       const refreshCall = mockFetch.mock.calls[1];
       const refreshHeaders = refreshCall[1]?.headers as
-        | Record<string, string>
-        | undefined;
+        Record<string, string> | undefined;
       expect(refreshCall[0]).toContain(
         "https://www.amazon.de/ap/exchangetoken/refresh",
       );
