@@ -235,6 +235,46 @@ export class AmazonClient {
     });
   }
 
+  /**
+   * Load a client from whichever credentials exist.
+   *
+   * Prefers the device registration and falls back to the legacy cookie file,
+   * so a registration-only install works and an upgrade keeps running until it
+   * registers. When neither exists this throws with `code === "ENOENT"`, which
+   * callers read as "not configured".
+   */
+  static async load(options: {
+    authPath: string;
+    cookiesPath: string;
+    autoRefresh?: boolean;
+    notificationService?: NotificationService;
+    cookieMaxAgeDays?: number;
+  }): Promise<AmazonClient> {
+    try {
+      return await AmazonClient.fromCredentials(options.authPath, {
+        autoRefresh: options.autoRefresh,
+        notificationService: options.notificationService,
+        cookieMaxAgeDays: options.cookieMaxAgeDays,
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "ENOENT") {
+        // A corrupt registration must not brick the service. Fall through and
+        // let the missing-cookie path report "not configured" instead.
+        logger.error(
+          { error, path: options.authPath },
+          "Amazon registration could not be read; falling back to the legacy cookie file",
+        );
+      }
+    }
+
+    return AmazonClient.fromFile(
+      options.cookiesPath,
+      options.autoRefresh ?? true,
+      options.notificationService,
+    );
+  }
+
   /** True when a device registration backs this client. */
   get isRegistered(): boolean {
     return Boolean(this.auth);

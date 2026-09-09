@@ -34,24 +34,29 @@ async function main() {
 
   let amazon: AmazonClient | undefined;
   try {
-    amazon = await AmazonClient.fromFile(
-      config.amazonCookiesPath,
-      config.amazonAutoRefreshCookies,
-      notifications,
-    );
+    amazon = await AmazonClient.load({
+      authPath: config.amazonAuthPath,
+      cookiesPath: config.amazonCookiesPath,
+      autoRefresh: config.amazonAutoRefreshCookies,
+      notificationService: notifications,
+      cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
+    });
   } catch (error) {
-    const isMissingCookiesFile =
+    const isMissingCredentials =
       error instanceof Error &&
       "code" in error &&
       (error as NodeJS.ErrnoException).code === "ENOENT";
 
-    if (!isMissingCookiesFile) {
+    if (!isMissingCredentials) {
       throw error;
     }
 
     logger.warn(
-      { path: config.amazonCookiesPath },
-      "Amazon cookies file not found at startup; start continues and auth checks will retry after cookies are saved",
+      {
+        authPath: config.amazonAuthPath,
+        cookiesPath: config.amazonCookiesPath,
+      },
+      "No Amazon credentials found at startup; start continues and syncing begins once a device is registered",
     );
   }
 

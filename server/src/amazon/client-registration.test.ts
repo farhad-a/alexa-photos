@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import type { NotificationService } from "../lib/notifications.js";
 import type { AmazonAuthRecord } from "./credentials.js";
 
@@ -329,5 +332,89 @@ describe("marketplace", () => {
 
   it("reports registration state", () => {
     expect(makeClient().isRegistered).toBe(true);
+  });
+});
+
+// Regression: every load site used the legacy cookie file, so a machine with
+// only a device registration reported "not configured" and never synced. The
+// whole feature was inert end to end.
+describe("AmazonClient.load", () => {
+  let dir: string;
+  let authPath: string;
+  let cookiesPath: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "amazon-load-"));
+    authPath = path.join(dir, "amazon-auth.json");
+    cookiesPath = path.join(dir, "amazon-cookies.json");
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  async function writeAuthFile() {
+    await fs.writeFile(
+      authPath,
+      JSON.stringify({
+        version: 1,
+        registeredAt: new Date().toISOString(),
+        marketplace: {
+          amazonPage: "amazon.com",
+          tld: "com",
+          acceptLanguage: "en-US",
+          proxyLanguage: "en_US",
+          deviceAppName: "alexa-photos",
+        },
+        registration: { refreshToken: "Atnr|t", deviceSerial: "SERIAL" },
+      }),
+    );
+  }
+
+  async function writeCookieFile() {
+    await fs.writeFile(
+      cookiesPath,
+      JSON.stringify({ "session-id": "s", "at-main": "a", "ubid-main": "u" }),
+    );
+  }
+
+  it("uses the registration when one exists", async () => {
+    await writeAuthFile();
+    const client = await AmazonClient.load({ authPath, cookiesPath });
+    expect(client.isRegistered).toBe(true);
+  });
+
+  it("prefers the registration over a leftover cookie file", async () => {
+    await writeAuthFile();
+    await writeCookieFile();
+    const client = await AmazonClient.load({ authPath, cookiesPath });
+    expect(client.isRegistered).toBe(true);
+  });
+
+  it("falls back to the cookie file so upgrades keep running", async () => {
+    await writeCookieFile();
+    const client = await AmazonClient.load({ authPath, cookiesPath });
+    expect(client.isRegistered).toBe(false);
+  });
+
+  it("falls back rather than bricking when the registration is corrupt", async () => {
+    await fs.writeFile(authPath, "{ not json");
+    await writeCookieFile();
+
+    const client = await AmazonClient.load({ authPath, cookiesPath });
+
+    expect(client.isRegistered).toBe(false);
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ path: authPath }),
+      expect.stringContaining("falling back"),
+    );
+  });
+
+  it("reports ENOENT when nothing is configured, which startup reads as not configured", async () => {
+    await expect(
+      AmazonClient.load({ authPath, cookiesPath }),
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });

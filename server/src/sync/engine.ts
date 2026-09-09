@@ -271,11 +271,13 @@ export class SyncEngine {
     try {
       // Create client lazily so auth status can be checked even on no-op syncs.
       if (!this.amazon) {
-        this.amazon = await AmazonClient.fromFile(
-          config.amazonCookiesPath,
-          config.amazonAutoRefreshCookies,
-          this.notifications,
-        );
+        this.amazon = await AmazonClient.load({
+          authPath: config.amazonAuthPath,
+          cookiesPath: config.amazonCookiesPath,
+          autoRefresh: config.amazonAutoRefreshCookies,
+          notificationService: this.notifications,
+          cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
+        });
         this.startRefreshIntervalIfNeeded();
       }
 
@@ -420,11 +422,13 @@ export class SyncEngine {
   private async ensureAmazonClient(): Promise<void> {
     // 1. Create client if not pre-injected
     if (!this.amazon) {
-      this.amazon = await AmazonClient.fromFile(
-        config.amazonCookiesPath,
-        config.amazonAutoRefreshCookies,
-        this.notifications,
-      );
+      this.amazon = await AmazonClient.load({
+        authPath: config.amazonAuthPath,
+        cookiesPath: config.amazonCookiesPath,
+        autoRefresh: config.amazonAutoRefreshCookies,
+        notificationService: this.notifications,
+        cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
+      });
       this.startRefreshIntervalIfNeeded();
     }
 
