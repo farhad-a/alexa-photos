@@ -8,13 +8,25 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/package*.json ./server/
 COPY web/package*.json ./web/
-RUN npm ci
+# --ignore-scripts: better-sqlite3 ships prebuilt N-API binaries in its tarball
+# (prebuilds/linux-*.node), but npm runs `node-gyp rebuild` for any package with a
+# binding.gyp. node:*-slim has no python/make/g++, so let the prebuilds be used.
+RUN npm ci --ignore-scripts
 
 COPY server/ ./server/
 COPY web/ ./web/
 RUN npm run build -w server && npm run build -w web
 
-# Stage 3: Runtime
+# Strip dev dependencies so the runtime stage can copy node_modules as-is,
+# avoiding a second install (and the ~20MB npm cache it would leave behind).
+RUN npm prune --omit=dev
+
+# Fail the build if the native binary is missing. --ignore-scripts fails silently,
+# and better-sqlite3 only ships prebuilds for x64/arm64 - on any other platform this
+# is the difference between a broken build and a container that crashes on start.
+RUN node -e "new (require('better-sqlite3'))(':memory:').exec('SELECT 1')"
+
+# Stage 2: Runtime
 FROM node:25-slim
 
 # Install curl for healthcheck
@@ -24,13 +36,13 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy workspace package files
+# Copy workspace package files (needed for "type": "module" resolution)
 COPY package*.json ./
 COPY server/package*.json ./server/
 COPY web/package*.json ./web/
 
-# Install production workspace dependencies
-RUN npm ci --omit=dev
+# Copy pruned production dependencies from builder
+COPY --from=builder /app/node_modules/ ./node_modules/
 
 # Copy compiled backend from builder
 COPY --from=builder /app/server/dist/ ./server/dist/
