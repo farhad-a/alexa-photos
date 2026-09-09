@@ -32,6 +32,23 @@ vi.mock("better-sqlite3", async (importOriginal) => {
   };
 });
 
+// The Amazon routes are thin. Mock the layers beneath them so no test starts
+// a login proxy or touches the network.
+const amazonSvc = vi.hoisted(() => ({
+  readAmazonStatus: vi.fn(),
+  testAmazonAuth: vi.fn(),
+  refreshAmazonCookies: vi.fn(),
+}));
+vi.mock("./services/amazon.js", () => amazonSvc);
+
+const amazonReg = vi.hoisted(() => ({
+  beginRegistration: vi.fn(),
+  cancelRegistration: vi.fn(async () => undefined),
+  getRegistrationStatus: vi.fn(() => ({ state: "idle" })),
+  removeRegistration: vi.fn(async () => undefined),
+}));
+vi.mock("../amazon/registration.js", () => amazonReg);
+
 class MockResponse {
   statusCode = 200;
   headersSent = false;
@@ -117,6 +134,195 @@ async function request(
 
   return res;
 }
+
+const REGISTRATION_SETTINGS = {
+  authPath: "./data/amazon-auth.json",
+  amazonPage: "amazon.com",
+  acceptLanguage: "en-US",
+  proxyLanguage: "en_US",
+  deviceAppName: "alexa-photos",
+  proxyOwnIp: "192.168.1.50",
+  proxyPort: 3456,
+  proxyListenBind: "0.0.0.0",
+  timeoutMs: 1000,
+  adminPort: 3000,
+};
+
+describe("Amazon account API", () => {
+  let server: AppServer;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    amazonReg.getRegistrationStatus.mockReturnValue({ state: "idle" });
+    server = new AppServer({
+      port: 0,
+      amazonAuthPath: "./data/amazon-auth.json",
+      registrationSettings: REGISTRATION_SETTINGS,
+    });
+  });
+
+  it("reports an unregistered device with 200, not 404", async () => {
+    // Missing credentials are a state the UI renders, not an error.
+    amazonSvc.readAmazonStatus.mockResolvedValue({
+      registered: false,
+      state: "idle",
+    });
+
+    const res = await request(server, { url: "/api/amazon/status" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ registered: false });
+  });
+
+  it("returns the proxy URL when registration starts", async () => {
+    amazonReg.beginRegistration.mockReturnValue({
+      state: "awaiting_login",
+      proxyUrl: "http://192.168.1.50:3456/",
+      expiresAt: "2026-09-09T01:00:00.000Z",
+    });
+
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/registration/start",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ proxyUrl: "http://192.168.1.50:3456/" });
+    expect(amazonReg.beginRegistration).toHaveBeenCalledWith(
+      REGISTRATION_SETTINGS,
+    );
+  });
+
+  it("conflicts when a registration is already running", async () => {
+    amazonReg.beginRegistration.mockImplementation(() => {
+      throw Object.assign(new Error("A registration is already in progress"), {
+        code: "REGISTRATION_IN_PROGRESS",
+      });
+    });
+
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/registration/start",
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("explains an unusable proxy address rather than failing silently", async () => {
+    amazonReg.beginRegistration.mockImplementation(() => {
+      throw new Error(
+        "Set AMAZON_PROXY_OWN_IP to an IP your browser can reach",
+      );
+    });
+
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/registration/start",
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toContain(
+      "AMAZON_PROXY_OWN_IP",
+    );
+  });
+
+  it("refuses to start when registration is not configured", async () => {
+    const bare = new AppServer({ port: 0 });
+
+    const res = await request(bare, {
+      method: "POST",
+      url: "/api/amazon/registration/start",
+    });
+
+    expect(res.statusCode).toBe(503);
+  });
+
+  it("exposes registration progress for polling", async () => {
+    amazonReg.getRegistrationStatus.mockReturnValue({
+      state: "awaiting_login",
+      proxyUrl: "http://192.168.1.50:3456/",
+    });
+
+    const res = await request(server, {
+      url: "/api/amazon/registration/status",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ state: "awaiting_login" });
+  });
+
+  it("cancels an in-flight registration", async () => {
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/registration/cancel",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(amazonReg.cancelRegistration).toHaveBeenCalled();
+  });
+
+  it("removes a stored registration", async () => {
+    const res = await request(server, {
+      method: "DELETE",
+      url: "/api/amazon/registration",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(amazonReg.removeRegistration).toHaveBeenCalledWith(
+      "./data/amazon-auth.json",
+    );
+  });
+
+  it("feeds an auth test back into the health metrics", async () => {
+    const onAmazonAuthChecked = vi.fn();
+    const wired = new AppServer({
+      port: 0,
+      amazonAuthPath: "./data/amazon-auth.json",
+      onAmazonAuthChecked,
+    });
+    amazonSvc.testAmazonAuth.mockResolvedValue({
+      authenticated: true,
+      state: "ok",
+      actionable: false,
+    });
+
+    const res = await request(wired, {
+      method: "POST",
+      url: "/api/amazon/auth/test",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(onAmazonAuthChecked).toHaveBeenCalledWith(true);
+  });
+
+  it("forces a refresh and reports the new cookie timestamp", async () => {
+    amazonSvc.refreshAmazonCookies.mockResolvedValue({
+      refreshed: true,
+      cookiesUpdatedAt: "2026-09-09T00:00:00.000Z",
+    });
+
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/auth/refresh",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ refreshed: true });
+  });
+
+  it("conflicts on refresh when no device is registered", async () => {
+    amazonSvc.refreshAmazonCookies.mockRejectedValue(
+      Object.assign(new Error("missing"), { code: "ENOENT" }),
+    );
+
+    const res = await request(server, {
+      method: "POST",
+      url: "/api/amazon/auth/refresh",
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+});
 
 describe("static file serving", () => {
   let server: AppServer;

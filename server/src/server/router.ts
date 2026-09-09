@@ -12,6 +12,15 @@ import {
   handleSaveCookies,
   handleTestCookies,
 } from "./controllers/cookies.js";
+import {
+  handleAmazonStatus,
+  handleCancelRegistration,
+  handleRefreshAmazonCookies,
+  handleRegistrationStatus,
+  handleRemoveRegistration,
+  handleStartRegistration,
+  handleTestAmazonAuth,
+} from "./controllers/amazon.js";
 import { handleTriggerSync } from "./controllers/sync.js";
 import { serveStaticFile } from "./static.js";
 import { AppRequestContext } from "./types.js";
@@ -76,6 +85,38 @@ export async function handleAppRequest(
     }
     if (urlPath === "/api/cookies/test" && req.method === "POST") {
       await handleTestCookies(context, res);
+      return;
+    }
+
+    if (urlPath === "/api/amazon/status" && req.method === "GET") {
+      await handleAmazonStatus(context, res);
+      return;
+    }
+    if (urlPath === "/api/amazon/registration/start" && req.method === "POST") {
+      handleStartRegistration(context, res);
+      return;
+    }
+    if (urlPath === "/api/amazon/registration/status" && req.method === "GET") {
+      handleRegistrationStatus(res);
+      return;
+    }
+    if (
+      urlPath === "/api/amazon/registration/cancel" &&
+      req.method === "POST"
+    ) {
+      await handleCancelRegistration(res);
+      return;
+    }
+    if (urlPath === "/api/amazon/registration" && req.method === "DELETE") {
+      await handleRemoveRegistration(context, res);
+      return;
+    }
+    if (urlPath === "/api/amazon/auth/test" && req.method === "POST") {
+      await handleTestAmazonAuth(context, res);
+      return;
+    }
+    if (urlPath === "/api/amazon/auth/refresh" && req.method === "POST") {
+      await handleRefreshAmazonCookies(context, res);
       return;
     }
 
