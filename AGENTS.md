@@ -121,7 +121,7 @@ npm run ci
 
 ## Deployment
 
-- **Docker**: `node:25-slim` base image (no browser dependencies needed)
+- **Docker**: `node:25-slim` base image (no browser dependencies needed). Multi-stage: the builder installs deps once with `--ignore-scripts`, builds, runs `npm prune --omit=dev`, and the runtime stage copies `node_modules` — one install, and no npm cache left in the final layer
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 8). If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
@@ -139,6 +139,8 @@ npm run ci
 - **Search vs nodes**: The `/search` endpoint does NOT support `kind:` filter (returns 400). Use `/nodes` for album queries
 - **Cookie key format**: Browser DevTools shows hyphens (`at-main`), some libraries use underscores (`at_main`). TLD detection handles both
 - **Date parsing**: iCloud API returns ISO strings for some photos, Apple epoch timestamps for others. Client handles both
+- **Docker `--ignore-scripts`** (don't remove): npm runs `node-gyp rebuild` for any package with a `binding.gyp`, and `node:*-slim` has no python/make/g++ — so a plain `npm ci` fails on better-sqlite3. Installing the toolchain is not the fix: better-sqlite3 v13 bundles prebuilt N-API binaries (`prebuilds/linux-{x64,arm64}.node`) and its `binding.gyp` sets both targets to `type: none` when a prebuild exists, so node-gyp compiles **nothing** either way — the toolchain adds 263MB to the builder for zero output. Only `--build-from-source` (`force_build=1`) actually compiles
+- **Native module build guard**: `--ignore-scripts` fails silently, and better-sqlite3 only ships prebuilds for x64/arm64. The Dockerfile asserts the binary loads (`node -e "new (require('better-sqlite3'))(':memory:')..."`) after pruning, so a platform without a prebuild (e.g. adding `linux/arm/v7`) fails the build instead of producing a container that crashes on start. If that ever fires, add `python3 make g++` to the builder stage — that's the case where compiling is genuinely needed
 
 ## Code Quality
 
