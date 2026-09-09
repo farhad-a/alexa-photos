@@ -1,7 +1,7 @@
 # Multi-stage build for alexa-photos sync service
 
 # Stage 1: Build workspace packages
-FROM node:25-slim AS builder
+FROM node:26-slim AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN npm prune --omit=dev
 RUN node -e "new (require('better-sqlite3'))(':memory:').exec('SELECT 1')"
 
 # Stage 2: Runtime
-FROM node:25-slim
+FROM node:26-slim
 
 # Install curl for healthcheck
 RUN apt-get update && \

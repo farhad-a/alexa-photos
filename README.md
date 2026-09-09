@@ -27,7 +27,7 @@ Uses the Amazon Photos REST API (no browser required).
 
 - iCloud shared album with "Public Website" enabled
 - Amazon Photos account (cookies from a browser session)
-- Docker (for production) or Node.js 20+ (CI validates on 24 and 25)
+- Docker (for production) or Node.js 24+ (CI validates on 24 and 26)
 
 ### Development (Devcontainer)
 
