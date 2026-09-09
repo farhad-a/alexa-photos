@@ -6,6 +6,26 @@ const configSchema = z.object({
   amazonCookiesPath: z.string().default("./data/amazon-cookies.json"),
   amazonAlbumName: z.string().default("Echo Show"),
   amazonAutoRefreshCookies: z.coerce.boolean().default(true),
+
+  // Device-registration auth. The marketplace fields must be set explicitly:
+  // alexa-cookie2 defaults to amazon.de, and a registration made against the
+  // wrong marketplace cannot be fixed by config, only redone in a browser.
+  amazonAuthPath: z.string().default("./data/amazon-auth.json"),
+  amazonMarketplace: z.string().default("amazon.com"),
+  amazonAcceptLanguage: z.string().default("en-US"),
+  amazonProxyLanguage: z.string().default("en_US"),
+  amazonDeviceAppName: z.string().default("alexa-photos"),
+  // Must be an IP literal the browser can reach. Auto-detection inside Docker
+  // returns the bridge address, which fails silently, so require it there.
+  amazonProxyOwnIp: z.string().optional(),
+  amazonProxyPort: z.coerce.number().default(3456),
+  amazonProxyListenBind: z.string().default("0.0.0.0"),
+  amazonRegistrationTimeoutMs: z.coerce
+    .number()
+    .default(10)
+    .transform((m) => m * 60 * 1000),
+  // Refresh only when cookies are older than this. They live about 14 days.
+  amazonCookieMaxAgeDays: z.coerce.number().default(7),
   syncDeletions: z.coerce.boolean().default(true),
   pollIntervalMs: z.coerce
     .number()
@@ -19,7 +39,7 @@ const configSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   cookieRefreshIntervalMs: z.coerce
     .number()
-    .default(8)
+    .default(12)
     .transform((h) => h * 60 * 60 * 1000),
   notificationThrottleMs: z.coerce
     .number()
@@ -36,6 +56,17 @@ function loadConfig(): Config {
     amazonCookiesPath: process.env.AMAZON_COOKIES_PATH,
     amazonAlbumName: process.env.AMAZON_ALBUM_NAME,
     amazonAutoRefreshCookies: process.env.AMAZON_AUTO_REFRESH_COOKIES,
+    amazonAuthPath: process.env.AMAZON_AUTH_PATH,
+    amazonMarketplace: process.env.AMAZON_MARKETPLACE,
+    amazonAcceptLanguage: process.env.AMAZON_ACCEPT_LANGUAGE,
+    amazonProxyLanguage: process.env.AMAZON_PROXY_LANGUAGE,
+    amazonDeviceAppName: process.env.AMAZON_DEVICE_APP_NAME,
+    amazonProxyOwnIp: process.env.AMAZON_PROXY_OWN_IP,
+    amazonProxyPort: process.env.AMAZON_PROXY_PORT,
+    amazonProxyListenBind: process.env.AMAZON_PROXY_LISTEN_BIND,
+    amazonRegistrationTimeoutMs:
+      process.env.AMAZON_REGISTRATION_TIMEOUT_MINUTES,
+    amazonCookieMaxAgeDays: process.env.AMAZON_COOKIE_MAX_AGE_DAYS,
     syncDeletions: process.env.SYNC_DELETIONS,
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     uploadDelayMs: process.env.UPLOAD_DELAY_MS,

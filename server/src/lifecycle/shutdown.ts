@@ -1,3 +1,4 @@
+import { cancelRegistration } from "../amazon/registration.js";
 import { logger as rootLogger } from "../lib/logger.js";
 import type { AppServer } from "../server/index.js";
 import type { StateStore } from "../state/store.js";
@@ -15,6 +16,7 @@ export function registerShutdownHandlers(options: {
 
   const shutdown = async () => {
     logger.info("Shutting down...");
+    await cancelRegistration();
     await health.stop();
     await sync.close();
     state.close();

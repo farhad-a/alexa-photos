@@ -5,6 +5,7 @@ const logger = rootLogger.child({ component: "main" });
 import { config } from "./lib/config.js";
 import { ICloudClient } from "./icloud/client.js";
 import { AmazonClient } from "./amazon/client.js";
+import { setCredentialsChangedHandler } from "./amazon/registration.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
 import { AppServer } from "./server/index.js";
@@ -33,24 +34,29 @@ async function main() {
 
   let amazon: AmazonClient | undefined;
   try {
-    amazon = await AmazonClient.fromFile(
-      config.amazonCookiesPath,
-      config.amazonAutoRefreshCookies,
-      notifications,
-    );
+    amazon = await AmazonClient.load({
+      authPath: config.amazonAuthPath,
+      cookiesPath: config.amazonCookiesPath,
+      autoRefresh: config.amazonAutoRefreshCookies,
+      notificationService: notifications,
+      cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
+    });
   } catch (error) {
-    const isMissingCookiesFile =
+    const isMissingCredentials =
       error instanceof Error &&
       "code" in error &&
       (error as NodeJS.ErrnoException).code === "ENOENT";
 
-    if (!isMissingCookiesFile) {
+    if (!isMissingCredentials) {
       throw error;
     }
 
     logger.warn(
-      { path: config.amazonCookiesPath },
-      "Amazon cookies file not found at startup; start continues and auth checks will retry after cookies are saved",
+      {
+        authPath: config.amazonAuthPath,
+        cookiesPath: config.amazonCookiesPath,
+      },
+      "No Amazon credentials found at startup; start continues and syncing begins once a device is registered",
     );
   }
 
@@ -61,6 +67,19 @@ async function main() {
     port: config.serverPort,
     state,
     cookiesPath: config.amazonCookiesPath,
+    amazonAuthPath: config.amazonAuthPath,
+    registrationSettings: {
+      authPath: config.amazonAuthPath,
+      amazonPage: config.amazonMarketplace,
+      acceptLanguage: config.amazonAcceptLanguage,
+      proxyLanguage: config.amazonProxyLanguage,
+      deviceAppName: config.amazonDeviceAppName,
+      proxyOwnIp: config.amazonProxyOwnIp,
+      proxyPort: config.amazonProxyPort,
+      proxyListenBind: config.amazonProxyListenBind,
+      timeoutMs: config.amazonRegistrationTimeoutMs,
+      adminPort: config.serverPort,
+    },
     onAmazonAuthChecked: (authenticated) => {
       sync.setAmazonAuthenticated(authenticated);
       health.updateMetrics({
@@ -85,6 +104,13 @@ async function main() {
     health,
     cookieRefreshIntervalMs: config.cookieRefreshIntervalMs,
     amazonCookiesPath: config.amazonCookiesPath,
+  });
+
+  // Re-registering replaces the credentials under the running client, so the
+  // engine has to drop the one it holds.
+  setCredentialsChangedHandler(async () => {
+    await sync.reloadAmazonClient();
+    health.updateMetrics({ status: "unhealthy", amazonAuthenticated: false });
   });
 
   registerShutdownHandlers({ health, sync, state });

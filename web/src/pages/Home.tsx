@@ -219,6 +219,11 @@ export default function Home() {
       </div>
 
       <div className="home-links">
+        <Link className="home-link" to="/amazon">
+          <h3>Amazon Account</h3>
+          <p>Register this app with Amazon and check authentication status.</p>
+        </Link>
+
         <Link className="home-link" to="/cookies">
           <h3>Amazon Cookies</h3>
           <p>View, update, and test Amazon authentication cookies.</p>

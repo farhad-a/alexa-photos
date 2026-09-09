@@ -130,7 +130,9 @@ export function parseCookieString(raw: string): Record<string, string> {
  * Detect region from a parsed cookie map.
  * Returns the TLD (e.g. "com", "co.uk", "de") or null if undetectable.
  */
-export function detectTld(cookies: Record<string, string>): string | null {
+export function detectTld(
+  cookies: Record<string, string | undefined>,
+): string | null {
   for (const key of Object.keys(cookies)) {
     if (key === "at-main" || key === "at_main") return "com";
     if (key.startsWith("at-acb")) return key.slice("at-acb".length);

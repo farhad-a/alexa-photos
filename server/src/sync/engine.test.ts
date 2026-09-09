@@ -72,7 +72,7 @@ vi.mock("../state/store.js", () => ({
   },
 }));
 
-// Mock AmazonClient.fromFile
+// Mock the credential loader the engine uses
 vi.mock("../amazon/client.js", () => {
   const mockCheckAuth = vi.fn().mockResolvedValue(true);
   const mockCheckAuthStatus = vi.fn(async () => {
@@ -124,7 +124,7 @@ vi.mock("../amazon/client.js", () => {
 
   return {
     AmazonClient: {
-      fromFile: vi.fn().mockResolvedValue(mockClient),
+      load: vi.fn().mockResolvedValue(mockClient),
       _mock: mockClient,
     },
   };
@@ -169,7 +169,7 @@ describe("SyncEngine", () => {
       await engine.run();
 
       // Auth status is now refreshed every run, even for no-op syncs.
-      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+      expect(AmazonClient.load).toHaveBeenCalledTimes(1);
     });
 
     it("does nothing when all photos are already synced", async () => {
@@ -184,7 +184,7 @@ describe("SyncEngine", () => {
       await engine.run();
 
       // Auth status is now refreshed every run, even for no-op syncs.
-      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+      expect(AmazonClient.load).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -481,7 +481,7 @@ describe("SyncEngine", () => {
         expect(mockMappings.has("old-photo")).toBe(true);
 
         // Auth status is now refreshed every run, even when deletions are skipped.
-        expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+        expect(AmazonClient.load).toHaveBeenCalledTimes(1);
       } finally {
         // Restore original value
         (configModule.config as any).syncDeletions = originalSyncDeletions;
@@ -546,7 +546,7 @@ describe("SyncEngine", () => {
 
       await engine.run();
 
-      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+      expect(AmazonClient.load).toHaveBeenCalledTimes(1);
       const mock = getAmazonMock();
       expect(mock.checkAuth).toHaveBeenCalledTimes(1);
       expect(mock.findOrCreateAlbum).toHaveBeenCalledWith("Echo Show");
@@ -565,11 +565,11 @@ describe("SyncEngine", () => {
       );
     });
 
-    it("reports not_configured when cookies file is missing during sync auth check", async () => {
-      const enoent = Object.assign(new Error("missing cookies"), {
+    it("reports not_configured when no credentials exist during sync auth check", async () => {
+      const enoent = Object.assign(new Error("missing credentials"), {
         code: "ENOENT",
       });
-      vi.mocked(AmazonClient.fromFile).mockRejectedValueOnce(enoent as any);
+      vi.mocked(AmazonClient.load).mockRejectedValueOnce(enoent as any);
 
       const photo = makePhoto("p1");
       vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
@@ -628,7 +628,7 @@ describe("SyncEngine", () => {
   });
 
   describe("pre-injected AmazonClient", () => {
-    it("skips fromFile when amazon is passed to constructor", async () => {
+    it("skips the loader when amazon is passed to constructor", async () => {
       const photo = makePhoto("p1");
       vi.spyOn(icloud, "getPhotos").mockResolvedValue([photo]);
 
@@ -639,7 +639,7 @@ describe("SyncEngine", () => {
       );
       await injectedEngine.run();
 
-      expect(AmazonClient.fromFile).not.toHaveBeenCalled();
+      expect(AmazonClient.load).not.toHaveBeenCalled();
       // checkAuth still called to verify credentials
       expect(getAmazonMock().checkAuth).toHaveBeenCalledTimes(1);
     });
@@ -673,7 +673,7 @@ describe("SyncEngine", () => {
       await injectedEngine.reloadAmazonClient();
       await injectedEngine.run();
 
-      expect(AmazonClient.fromFile).toHaveBeenCalledTimes(1);
+      expect(AmazonClient.load).toHaveBeenCalledTimes(1);
     });
   });
 

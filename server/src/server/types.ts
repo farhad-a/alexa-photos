@@ -1,3 +1,4 @@
+import type { RegistrationSettings } from "../amazon/registration.js";
 import { StateStore } from "../state/store.js";
 import { SyncMetrics } from "../sync/engine.js";
 
@@ -10,6 +11,8 @@ export interface AppServerOptions {
   port: number;
   state?: StateStore;
   cookiesPath?: string;
+  amazonAuthPath?: string;
+  registrationSettings?: RegistrationSettings;
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onCookiesSaved?: () => void | Promise<void>;
@@ -28,6 +31,8 @@ export interface AppRequestContext {
   metrics: HealthMetrics;
   state: StateStore | null;
   cookiesPath: string;
+  amazonAuthPath: string;
+  registrationSettings?: RegistrationSettings;
   staticDir: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onCookiesSaved?: () => void | Promise<void>;

@@ -16,6 +16,17 @@ import {
   classifyAmazonAuthError,
   classifyAmazonAuthResponse,
 } from "../lib/provider-errors.js";
+import {
+  cookieAgeDays,
+  parseCookieHeader,
+  readAmazonAuth,
+  readAmazonSession,
+  writeAmazonAuth,
+  writeAmazonSession,
+  type AmazonAuthRecord,
+  type AmazonSessionRecord,
+} from "./credentials.js";
+import { refreshRegistration } from "./registration-proxy.js";
 
 /**
  * Amazon Photos REST API client
@@ -29,6 +40,9 @@ const COOKIES_PATH = "./data/amazon-cookies.json";
 const NORTH_AMERICA_TLDS = new Set(["com", "ca", "com.mx", "com.br"]);
 
 const MAX_TRASH_BATCH = 50;
+
+const REGISTRATION_INVALID_ALERT =
+  "Amazon device registration is no longer valid. Re-register in the Alexa Photos web UI.";
 
 export interface AmazonNode {
   id: string;
@@ -47,8 +61,9 @@ export interface AmazonNode {
 }
 
 export interface AmazonCookies {
-  "session-id": string;
-  [key: string]: string;
+  /** Optional: a token exchange does not always return one. */
+  "session-id"?: string;
+  [key: string]: string | undefined;
 }
 
 export type AmazonAuthState =
@@ -90,12 +105,26 @@ export class AmazonClient {
   private driveUrl: string;
   private cdproxyUrl: string;
   private baseParams: Record<string, string>;
-  private sessionId: string;
+  private sessionId: string | undefined;
   private rootNodeId: string | null = null;
   private cookiesPath: string;
   private autoRefresh: boolean;
   private notificationService?: NotificationService;
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  /** Device-registration credentials. Absent on the legacy cookie-file path. */
+  private auth?: AmazonAuthRecord;
+  private authPath?: string;
+  private cookiesUpdatedAt: string | null = null;
+  private lastRefreshAt: string | null = null;
+  private cookieMaxAgeDays: number;
+  private lastRefreshAttemptMs = 0;
+  /**
+   * Sticky. Set when Amazon rejects the refresh token outright, which means
+   * the device was deregistered or the password changed. No amount of retrying
+   * helps; only a human re-registering in a browser does.
+   */
+  private registrationInvalid = false;
 
   constructor(
     cookies: AmazonCookies,
@@ -103,10 +132,22 @@ export class AmazonClient {
       cookiesPath?: string;
       autoRefresh?: boolean;
       notificationService?: NotificationService;
+      auth?: AmazonAuthRecord;
+      authPath?: string;
+      cookieMaxAgeDays?: number;
+      cookiesUpdatedAt?: string | null;
+      lastRefreshAt?: string | null;
     } = {},
   ) {
     this.cookies = cookies;
-    this.tld = this.determineTld(cookies);
+    this.auth = options.auth;
+    this.authPath = options.authPath;
+    this.cookieMaxAgeDays = options.cookieMaxAgeDays ?? 7;
+    this.cookiesUpdatedAt = options.cookiesUpdatedAt ?? null;
+    this.lastRefreshAt = options.lastRefreshAt ?? null;
+    // The registration record is authoritative for the marketplace. Sniffing
+    // it from cookie names is a fallback for the legacy cookie-file path.
+    this.tld = options.auth?.marketplace.tld ?? this.determineTld(cookies);
     this.driveUrl = `https://www.amazon.${this.tld}/drive/v1`;
     this.cdproxyUrl = this.determineCdproxy();
     this.sessionId = cookies["session-id"];
@@ -156,6 +197,105 @@ export class AmazonClient {
   }
 
   /**
+   * Load device-registration credentials from disk.
+   *
+   * A missing auth file throws with `code === "ENOENT"` intact, which callers
+   * use to report "not configured" rather than crashing. A missing session
+   * file is not that case: it simply means no cookies have been minted yet, so
+   * construction succeeds and the first request mints them.
+   */
+  static async fromCredentials(
+    authPath: string,
+    options: {
+      autoRefresh?: boolean;
+      notificationService?: NotificationService;
+      cookieMaxAgeDays?: number;
+    } = {},
+  ): Promise<AmazonClient> {
+    const auth = await readAmazonAuth(authPath);
+    const session = await readAmazonSession(authPath);
+
+    logger.debug(
+      {
+        path: authPath,
+        marketplace: auth.marketplace.amazonPage,
+        hasSession: Boolean(session),
+      },
+      "Loaded Amazon device registration",
+    );
+
+    return new AmazonClient((session?.cookies ?? {}) as AmazonCookies, {
+      auth,
+      authPath,
+      autoRefresh: options.autoRefresh ?? true,
+      notificationService: options.notificationService,
+      cookieMaxAgeDays: options.cookieMaxAgeDays,
+      cookiesUpdatedAt: session?.cookiesUpdatedAt ?? null,
+      lastRefreshAt: session?.lastRefreshAt ?? null,
+    });
+  }
+
+  /**
+   * Load a client from whichever credentials exist.
+   *
+   * Prefers the device registration and falls back to the legacy cookie file,
+   * so a registration-only install works and an upgrade keeps running until it
+   * registers. When neither exists this throws with `code === "ENOENT"`, which
+   * callers read as "not configured".
+   */
+  static async load(options: {
+    authPath: string;
+    cookiesPath: string;
+    autoRefresh?: boolean;
+    notificationService?: NotificationService;
+    cookieMaxAgeDays?: number;
+  }): Promise<AmazonClient> {
+    try {
+      return await AmazonClient.fromCredentials(options.authPath, {
+        autoRefresh: options.autoRefresh,
+        notificationService: options.notificationService,
+        cookieMaxAgeDays: options.cookieMaxAgeDays,
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "ENOENT") {
+        // A corrupt registration must not brick the service. Fall through and
+        // let the missing-cookie path report "not configured" instead.
+        logger.error(
+          { error, path: options.authPath },
+          "Amazon registration could not be read; falling back to the legacy cookie file",
+        );
+      }
+    }
+
+    return AmazonClient.fromFile(
+      options.cookiesPath,
+      options.autoRefresh ?? true,
+      options.notificationService,
+    );
+  }
+
+  /** True when a device registration backs this client. */
+  get isRegistered(): boolean {
+    return Boolean(this.auth);
+  }
+
+  /** True when Amazon has rejected the refresh token and a human must re-register. */
+  get needsReregistration(): boolean {
+    return this.registrationInvalid;
+  }
+
+  get cookieAgeInDays(): number | null {
+    return cookieAgeDays(
+      this.cookiesUpdatedAt
+        ? ({
+            cookiesUpdatedAt: this.cookiesUpdatedAt,
+          } as AmazonSessionRecord)
+        : null,
+    );
+  }
+
+  /**
    * Determine TLD from cookie key names.
    * US cookies: `at-main` or `at_main` (hyphen or underscore).
    * International: `at-acb{tld}`.
@@ -196,7 +336,27 @@ export class AmazonClient {
     }
   }
 
+  /** The cookie jar with any undefined entries dropped. */
+  private definedCookies(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(this.cookies)) {
+      if (value) out[key] = value;
+    }
+    return out;
+  }
+
   private async persistCookies(): Promise<void> {
+    if (this.authPath) {
+      this.cookiesUpdatedAt = new Date().toISOString();
+      await writeAmazonSession(this.authPath, {
+        version: 1,
+        cookiesUpdatedAt: this.cookiesUpdatedAt,
+        lastRefreshAt: this.lastRefreshAt,
+        cookies: this.definedCookies(),
+      });
+      return;
+    }
+
     await fs.writeFile(
       this.cookiesPath,
       JSON.stringify(this.cookies, null, 2),
@@ -245,17 +405,21 @@ export class AmazonClient {
 
   private get cookieHeader(): string {
     return Object.entries(this.cookies)
+      .filter(([, v]) => Boolean(v))
       .map(([k, v]) => `${k}=${v}`)
       .join("; ");
   }
 
   private get headers(): Record<string, string> {
-    return {
+    const headers: Record<string, string> = {
       Cookie: this.cookieHeader,
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "x-amzn-sessionid": this.sessionId,
     };
+    // A token exchange does not always return session-id. Omit the header
+    // rather than sending the string "undefined".
+    if (this.sessionId) headers["x-amzn-sessionid"] = this.sessionId;
+    return headers;
   }
 
   private buildUrl(base: string, params: Record<string, string> = {}): string {
@@ -295,7 +459,7 @@ export class AmazonClient {
         // Try to refresh cookies automatically
         if (this.autoRefresh && attempt === 0) {
           logger.info("Token expired, attempting automatic refresh...");
-          const refreshed = await this.refreshCookies();
+          const refreshed = await this.refreshCookies({ force: true });
           if (refreshed) {
             logger.info("Cookies refreshed successfully, retrying request");
             continue; // Retry the request with new cookies
@@ -327,10 +491,165 @@ export class AmazonClient {
   }
 
   /**
-   * Attempt to refresh the authentication token using session cookies.
-   * Returns true if refresh was successful, false otherwise.
+   * Refresh the auth cookies. Returns true when they are usable afterwards.
+   *
+   * Dispatches on how this client was configured. Device registration is the
+   * supported path; the legacy exchange below survives only until the manual
+   * cookie flow is removed.
    */
   private async refreshCookies(options?: {
+    notifyOnNonAuthFailure?: boolean;
+    force?: boolean;
+  }): Promise<boolean> {
+    if (this.auth) return this.refreshViaRegistration(options);
+    return this.refreshViaLegacyExchange(options);
+  }
+
+  /**
+   * Mint fresh cookies from the stored device-registration refresh token.
+   *
+   * Age-gated: cookies live about 14 days, so a proactive call on a young set
+   * is a no-op. Anything driven by a 401 must pass `force`.
+   */
+  private async refreshViaRegistration(options?: {
+    notifyOnNonAuthFailure?: boolean;
+    force?: boolean;
+  }): Promise<boolean> {
+    const auth = this.auth;
+    if (!auth) return false;
+
+    if (this.registrationInvalid) {
+      logger.warn(
+        "Amazon device registration is invalid; skipping refresh until re-registered",
+      );
+      return false;
+    }
+
+    const ageDays = this.cookieAgeInDays;
+    if (
+      !options?.force &&
+      ageDays !== null &&
+      ageDays < this.cookieMaxAgeDays
+    ) {
+      logger.debug(
+        {
+          ageDays: Number(ageDays.toFixed(2)),
+          maxAgeDays: this.cookieMaxAgeDays,
+        },
+        "Amazon cookies still fresh; skipping refresh",
+      );
+      return true;
+    }
+
+    // A 401 on every request of a failing sync could otherwise hammer the
+    // token endpoint and earn a bot-detection block, which is worse than a
+    // stalled sync.
+    const sinceLastMs = Date.now() - this.lastRefreshAttemptMs;
+    if (this.lastRefreshAttemptMs > 0 && sinceLastMs < 60_000) {
+      logger.warn(
+        { sinceLastMs },
+        "Amazon cookie refresh throttled; last attempt was under a minute ago",
+      );
+      return false;
+    }
+    this.lastRefreshAttemptMs = Date.now();
+
+    try {
+      const refreshed = await refreshRegistration(auth.registration, {
+        amazonPage: auth.marketplace.amazonPage,
+        acceptLanguage: auth.marketplace.acceptLanguage,
+        proxyLanguage: auth.marketplace.proxyLanguage,
+        deviceAppName: auth.marketplace.deviceAppName,
+      });
+
+      const minted = parseCookieHeader(
+        refreshed.localCookie || refreshed.loginCookie,
+      );
+      if (Object.keys(minted).length === 0) {
+        logger.warn("Amazon refresh returned no cookies");
+        return false;
+      }
+
+      for (const [name, value] of Object.entries(minted)) {
+        if (value) this.cookies[name] = value;
+      }
+
+      // The exchange does not always return session-id. Carry the previous one
+      // forward rather than dropping the header entirely.
+      if (!this.cookies["session-id"] && this.sessionId) {
+        this.cookies["session-id"] = this.sessionId;
+        logger.debug("Backfilled session-id from the previous session");
+      }
+
+      const detected = detectTld(this.cookies);
+      if (detected && detected !== auth.marketplace.tld) {
+        logger.warn(
+          { expected: auth.marketplace.tld, detected },
+          "Refreshed cookies belong to a different marketplace than the registration",
+        );
+      }
+
+      this.updateSessionIdFromCookies("device registration refresh");
+      this.lastRefreshAt = new Date().toISOString();
+      await this.persistCookies();
+
+      // The library can hand back a rotated refresh token. Losing it would
+      // strand the registration.
+      if (
+        refreshed.refreshToken &&
+        refreshed.refreshToken !== auth.registration.refreshToken &&
+        this.authPath
+      ) {
+        this.auth = { ...auth, registration: refreshed };
+        await writeAmazonAuth(this.authPath, this.auth);
+        logger.info("Amazon refresh token rotated and persisted");
+      }
+
+      logger.info(
+        { cookieCount: Object.keys(minted).length },
+        "Minted fresh Amazon cookies from device registration",
+      );
+
+      this.notificationService?.clearAlertThrottle(
+        REGISTRATION_INVALID_ALERT,
+        "error",
+      );
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (/invalid_grant|invalid refresh token|invalid_token/i.test(message)) {
+        this.registrationInvalid = true;
+        logger.error(
+          { error },
+          "Amazon rejected the refresh token; the device registration is no longer valid",
+        );
+        await this.notificationService?.sendAlert(
+          REGISTRATION_INVALID_ALERT,
+          "error",
+        );
+        return false;
+      }
+
+      logger.error({ error }, "Amazon cookie refresh failed");
+      if (options?.notifyOnNonAuthFailure !== false) {
+        await this.notificationService?.sendAlert(
+          "Amazon cookie refresh failed. Will retry automatically.",
+          "warning",
+        );
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Legacy refresh seeded with a browser sess-at cookie.
+   *
+   * Kept only for the manual cookie path, which is being removed. The seed is
+   * a browser-session token rather than a durable refresh token, which is why
+   * manually pasted cookies died within minutes.
+   */
+  private async refreshViaLegacyExchange(options?: {
     notifyOnNonAuthFailure?: boolean;
   }): Promise<boolean> {
     try {
@@ -603,6 +922,7 @@ export class AmazonClient {
     buffer: Buffer,
     filename: string,
     parentNodeId?: string,
+    attempt = 0,
   ): Promise<AmazonNode> {
     if (!parentNodeId) {
       if (!this.rootNodeId) await this.getRoot();
@@ -636,14 +956,15 @@ export class AmazonClient {
     }
 
     if (res.status === 401) {
-      // Try to refresh and retry once
-      if (this.autoRefresh) {
+      // Try to refresh and retry once. The depth guard matters because an
+      // age-gated refresh can report success without doing any work, which
+      // would otherwise make this recurse forever.
+      if (this.autoRefresh && attempt < 1) {
         logger.info("Upload auth failed, attempting refresh...");
-        const refreshed = await this.refreshCookies();
+        const refreshed = await this.refreshCookies({ force: true });
         if (refreshed) {
           logger.info("Retrying upload with refreshed cookies");
-          // Retry upload with new cookies
-          return this.uploadPhoto(buffer, filename, parentNodeId);
+          return this.uploadPhoto(buffer, filename, parentNodeId, attempt + 1);
         }
       }
       throw new Error("Amazon Photos auth failed — cookies expired.");
@@ -830,6 +1151,7 @@ export class AmazonClient {
   /** Refresh cookies immediately. Returns true if successful. */
   async refreshNow(options?: {
     notifyOnNonAuthFailure?: boolean;
+    force?: boolean;
   }): Promise<boolean> {
     return this.refreshCookies(options);
   }

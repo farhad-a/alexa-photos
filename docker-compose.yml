@@ -5,7 +5,13 @@ services:
     # For production, use released image:
     image: ghcr.io/farhad-a/alexa-photos:latest
     ports:
-      - "3000:3000" # Health endpoint
+      - "3000:3000" # Health endpoint + admin UI
+      # Login proxy, used only while registering a device.
+      # Host and container port MUST match: the proxy rewrites Amazon's pages
+      # to embed this address and port, so a remapped host port produces links
+      # the browser cannot follow. Keep this on your LAN; it proxies a real
+      # Amazon sign-in.
+      - "3456:3456"
     volumes:
       - ./data:/app/data
     env_file:

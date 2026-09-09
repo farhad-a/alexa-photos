@@ -829,3 +829,18 @@ textarea.cookie-paste {
     color: #aaa;
   }
 }
+
+/* Amazon account page */
+.amazon-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #d8d8d8);
+  border-radius: 8px;
+}
+
+.amazon-proxy-link {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+  word-break: break-all;
+}
