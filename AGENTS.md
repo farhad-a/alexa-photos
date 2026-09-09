@@ -35,11 +35,13 @@ web/
 ## Key Patterns & Conventions
 
 ### Configuration
+
 - **All config via environment variables**, validated with **Zod** in [server/src/lib/config.ts](server/src/lib/config.ts)
 - Use `z.coerce` for numbers from env vars
 - Export singleton `config` object, not factory functions
 
 ### Logging
+
 - Use **pino** structured logging throughout
 - Always include context objects: `logger.info({ photoId, amazonId }, "message")`
 - **Child loggers**: Each module creates `rootLogger.child({ component: "..." })` — filter by component in production
@@ -47,6 +49,7 @@ web/
 - **Test mocks**: Logger mocks must include `child()` — use `vi.hoisted()` to hoist the mock above `vi.mock()` factory
 
 ### Notifications
+
 - Optional alerting via `ALERT_WEBHOOK_URL` or `PUSHOVER_TOKEN`/`PUSHOVER_USER`
 - Implementation in [server/src/lib/notifications.ts](server/src/lib/notifications.ts)
 - **Throttling**: Duplicate alerts throttled (default 60 minutes, configurable via `NOTIFICATION_THROTTLE_MINUTES`; `-1` = throttle indefinitely until process restart). Per-call `skipThrottle` bypasses throttling for one-off operational events (e.g. sync summaries)
@@ -55,12 +58,14 @@ web/
 ## Platform Clients
 
 ### ICloudClient ([server/src/icloud/client.ts](server/src/icloud/client.ts))
+
 - **Auth**: None — uses public shared album API
 - **Partition discovery**: POST to `p01-sharedstreams.icloud.com`, follow 330 redirect via `X-Apple-MMe-Host` header
 - **Date parsing**: Handles both ISO strings and Apple epoch (seconds since 2001-01-01)
 - **Retry logic**: Exponential backoff with jitter for downloads (configurable via `ICLOUD_DOWNLOAD_MAX_RETRIES`, default: 3)
 
 ### AmazonClient ([server/src/amazon/client.ts](server/src/amazon/client.ts))
+
 - **Auth**: Cookie-based — cookies stored in `./data/amazon-cookies.json`
 - **Ported from**: [trevorhobenshield/amazon_photos](https://github.com/trevorhobenshield/amazon_photos) Python library
 - **Base URL**: `https://www.amazon.{tld}/drive/v1`
@@ -72,6 +77,7 @@ web/
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
 ### SyncEngine ([server/src/sync/engine.ts](server/src/sync/engine.ts))
+
 - **Dependency injection**: Accepts `StateStore` via constructor — shared with `AppServer` for admin APIs
 - **Diffing**: Set-based — compare iCloud photo GUIDs vs stored mappings
 - **Additions**: Check checksum for existing content → if found, reuse Amazon node + add to album → else download → upload → add to album → save mapping
@@ -87,6 +93,7 @@ web/
 - **No resync on external delete**: If a photo is deleted from Amazon Photos directly, the mapping still exists — the engine skips it. Delete the mapping via the admin UI to force a resync
 
 ### StateStore ([server/src/state/store.ts](server/src/state/store.ts))
+
 - **SQLite** via `better-sqlite3`
 - **Shared singleton**: Created in `index.ts`, injected into both `SyncEngine` and `AppServer`
 - **Table**: `photo_mappings` (icloud_id PK, icloud_checksum, amazon_id, synced_at)
@@ -121,7 +128,7 @@ npm run ci
 
 ## Deployment
 
-- **Docker**: `node:25-slim` base image (no browser dependencies needed). Multi-stage: the builder installs deps once with `--ignore-scripts`, builds, runs `npm prune --omit=dev`, and the runtime stage copies `node_modules` — one install, and no npm cache left in the final layer
+- **Docker**: `node:26-slim` base image (no browser dependencies needed). Multi-stage: the builder installs deps once with `--ignore-scripts`, builds, runs `npm prune --omit=dev`, and the runtime stage copies `node_modules` — one install, and no npm cache left in the final layer
 - **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
 - **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 8). If refresh fails, alerts via webhook/Pushover
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
@@ -146,12 +153,11 @@ npm run ci
 
 - **ESLint**: `@typescript-eslint/no-explicit-any` is set to `warn` — use proper types (interfaces for API responses, SQLite rows, etc.) instead of `any`
 - **Prettier**: Formatting enforced via `npm run format:check` in CI
-- **CI**: GitHub Actions runs on Node 24 + 25 — replicate locally with `npm run ci`
+- **CI**: GitHub Actions runs on Node 24 + 26 — replicate locally with `npm run ci`
 - Run `npm run ci` before pushing to catch issues early
 
 ## Testing
 
-- **190 passing tests** across 11 test files
 - Coverage: ICloudClient, AmazonClient, StateStore, SyncEngine, login helpers, notifications, server/API endpoints
 - Run with `npm test`
 
