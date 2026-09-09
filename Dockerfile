@@ -46,6 +46,8 @@ ENV NODE_ENV=production
 
 # Expose health/UI endpoint
 EXPOSE 3000
+# Login proxy, used only during device registration
+EXPOSE 3456
 
 # Add healthcheck to ensure the service is running and healthy
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 CMD [ "curl", "-s", "http://localhost:3000/health" ]

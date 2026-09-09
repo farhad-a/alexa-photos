@@ -46,7 +46,39 @@ Uses the Amazon Photos REST API (no browser required).
 4. Copy the URL (e.g., `https://www.icloud.com/sharedalbum/#ABC123DEF456`)
 5. The token is the part after `#` (e.g., `ABC123DEF456`)
 
-### Amazon Photos Cookies
+### Amazon Device Registration (recommended)
+
+The service signs in to Amazon **once** and keeps a long-lived device token,
+then mints its own auth cookies from it. Cookies last about two weeks and are
+refreshed automatically before they expire. Your password is never sent to or
+stored by this app.
+
+**Before you register**, set the marketplace if you are not on `amazon.com`, and
+in Docker set `AMAZON_PROXY_OWN_IP`. A registration made against the wrong
+marketplace can only be fixed by registering again in a browser.
+
+1. Open the admin UI at `http://<host>:3000/amazon`
+2. Click **Register device**. The app starts a login proxy and shows an address
+3. Open that address in a browser on any device on your network
+4. Sign in to Amazon. Two-step verification and CAPTCHAs are handled there
+5. The browser returns to the admin UI and the page flips to registered
+
+The proxy runs only during registration and is shut down afterwards.
+
+> **If the address is unreachable**, set `AMAZON_PROXY_OWN_IP` to an IP literal
+> your browser can reach. Auto-detection inside Docker returns the container
+> bridge address, which nothing on your network can reach, and the proxy still
+> appears to start.
+
+> **Publish the proxy port with matching host and container numbers**
+> (`3456:3456`). The proxy rewrites Amazon's pages to embed that address, so a
+> remapped host port produces links the browser cannot follow. Keep the port on
+> your LAN: it proxies a live Amazon sign-in.
+
+Removing a registration in the UI only forgets the local credentials. The device
+stays listed in your Amazon account until you remove it at `amazon.com/mycd`.
+
+### Amazon Photos Cookies (legacy, being removed)
 
 The sync service authenticates to Amazon Photos via cookies (no passwords stored).
 
@@ -111,17 +143,17 @@ docker compose logs -f
 
 ### Development
 
-| Command                      | Description                      |
-| ---------------------------- | -------------------------------- |
-| `npm run dev`                | Start sync service in watch mode |
-| `npm run build`              | Build backend for production     |
-| `npm run web:dev`            | Start React UI (Vite dev server) |
-| `npm run web:build`          | Build React UI for production     |
-| `npm run start`              | Run production build             |
+| Command                      | Description                                                      |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `npm run dev`                | Start sync service in watch mode                                 |
+| `npm run build`              | Build backend for production                                     |
+| `npm run web:dev`            | Start React UI (Vite dev server)                                 |
+| `npm run web:build`          | Build React UI for production                                    |
+| `npm run start`              | Run production build                                             |
 | `npm run ci`                 | Run full CI pipeline (backend + frontend + format + lint + test) |
-| `npm run icloud:test`        | Test iCloud album fetch          |
-| `npm run amazon:verify`      | Live-check Amazon auth + cookie rotation persistence |
-| `npm run notifications:test` | Test notification system         |
+| `npm run icloud:test`        | Test iCloud album fetch                                          |
+| `npm run amazon:verify`      | Live-check Amazon auth + cookie rotation persistence             |
+| `npm run notifications:test` | Test notification system                                         |
 
 ### Docker
 
@@ -162,22 +194,22 @@ npm test           # Run tests in watch mode
 
 ## Environment Variables
 
-| Variable                      | Description                                 | Default                      |
-| ----------------------------- | ------------------------------------------- | ---------------------------- |
-| `ICLOUD_ALBUM_TOKEN`          | Token from shared album URL                 | (required)                   |
-| `ICLOUD_DOWNLOAD_MAX_RETRIES` | Retry attempts for photo downloads          | `3`                          |
-| `AMAZON_COOKIES_PATH`         | Path to cookies JSON file                   | `./data/amazon-cookies.json` |
-| `AMAZON_ALBUM_NAME`           | Album name in Amazon Photos                 | `Echo Show`                  |
-| `AMAZON_AUTO_REFRESH_COOKIES` | Automatically refresh expired auth tokens   | `true`                       |
-| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `8`                       |
-| `SYNC_DELETIONS`              | Delete from Amazon when removed from iCloud | `true`                       |
-| `POLL_INTERVAL_SECONDS`       | Sync interval in seconds                    | `60`                         |
-| `UPLOAD_DELAY_MS`             | Delay between uploads (rate limiting)       | `0` (no delay)               |
-| `SERVER_PORT`                 | Port for health/metrics/admin HTTP server   | `3000`                       |
-| `LOG_LEVEL`                   | Logging level                               | `info`                       |
-| `ALERT_WEBHOOK_URL`           | Webhook URL for alerts (optional)           | (none)                       |
-| `PUSHOVER_TOKEN`              | Pushover app token (optional)               | (none)                       |
-| `PUSHOVER_USER`               | Pushover user key (optional)                | (none)                       |
+| Variable                        | Description                                   | Default                      |
+| ------------------------------- | --------------------------------------------- | ---------------------------- |
+| `ICLOUD_ALBUM_TOKEN`            | Token from shared album URL                   | (required)                   |
+| `ICLOUD_DOWNLOAD_MAX_RETRIES`   | Retry attempts for photo downloads            | `3`                          |
+| `AMAZON_COOKIES_PATH`           | Path to cookies JSON file                     | `./data/amazon-cookies.json` |
+| `AMAZON_ALBUM_NAME`             | Album name in Amazon Photos                   | `Echo Show`                  |
+| `AMAZON_AUTO_REFRESH_COOKIES`   | Automatically refresh expired auth tokens     | `true`                       |
+| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `8`                          |
+| `SYNC_DELETIONS`                | Delete from Amazon when removed from iCloud   | `true`                       |
+| `POLL_INTERVAL_SECONDS`         | Sync interval in seconds                      | `60`                         |
+| `UPLOAD_DELAY_MS`               | Delay between uploads (rate limiting)         | `0` (no delay)               |
+| `SERVER_PORT`                   | Port for health/metrics/admin HTTP server     | `3000`                       |
+| `LOG_LEVEL`                     | Logging level                                 | `info`                       |
+| `ALERT_WEBHOOK_URL`             | Webhook URL for alerts (optional)             | (none)                       |
+| `PUSHOVER_TOKEN`                | Pushover app token (optional)                 | (none)                       |
+| `PUSHOVER_USER`                 | Pushover user key (optional)                  | (none)                       |
 
 ## Notifications
 
