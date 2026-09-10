@@ -36,7 +36,6 @@ async function main() {
   try {
     amazon = await AmazonClient.load({
       authPath: config.amazonAuthPath,
-      cookiesPath: config.amazonCookiesPath,
       autoRefresh: config.amazonAutoRefreshCookies,
       notificationService: notifications,
       cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
@@ -54,7 +53,6 @@ async function main() {
     logger.warn(
       {
         authPath: config.amazonAuthPath,
-        cookiesPath: config.amazonCookiesPath,
       },
       "No Amazon credentials found at startup; start continues and syncing begins once a device is registered",
     );

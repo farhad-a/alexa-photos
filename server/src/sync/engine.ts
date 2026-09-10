@@ -273,7 +273,6 @@ export class SyncEngine {
       if (!this.amazon) {
         this.amazon = await AmazonClient.load({
           authPath: config.amazonAuthPath,
-          cookiesPath: config.amazonCookiesPath,
           autoRefresh: config.amazonAutoRefreshCookies,
           notificationService: this.notifications,
           cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
@@ -424,7 +423,6 @@ export class SyncEngine {
     if (!this.amazon) {
       this.amazon = await AmazonClient.load({
         authPath: config.amazonAuthPath,
-        cookiesPath: config.amazonCookiesPath,
         autoRefresh: config.amazonAutoRefreshCookies,
         notificationService: this.notifications,
         cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
