@@ -14,6 +14,8 @@ export interface AppServerOptions {
   amazonAuthPath?: string;
   registrationSettings?: RegistrationSettings;
   linkSettings?: LinkSettings;
+  /** Extra Host header values to accept; loopback and IP literals always pass. */
+  allowedHosts?: string[];
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onSyncRequested?: () => void | Promise<void>;
@@ -33,6 +35,7 @@ export interface AppRequestContext {
   amazonAuthPath: string;
   registrationSettings?: RegistrationSettings;
   linkSettings?: LinkSettings;
+  allowedHosts?: string[];
   staticDir: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onSyncRequested?: () => void | Promise<void>;

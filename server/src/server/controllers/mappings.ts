@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from "http";
 import { z } from "zod";
 import { logger as rootLogger } from "../../lib/logger.js";
-import { readBody, sendJson } from "../http.js";
+import { isJsonContentType, readBody, sendJson } from "../http.js";
 import {
   bulkDeleteMappings,
   deleteMapping,
@@ -72,6 +72,14 @@ export async function handleBulkDelete(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
+  // A cross-origin `text/plain` POST is a CORS-simple request that skips
+  // preflight entirely, so requiring the real content type keeps this route
+  // from being reachable that way even if the CSRF guard ever regresses.
+  if (!isJsonContentType(req.headers?.["content-type"])) {
+    sendJson(res, 415, { error: "Content-Type must be application/json" });
+    return;
+  }
+
   const body = await readBody(req);
   let parsedJson: unknown;
   try {

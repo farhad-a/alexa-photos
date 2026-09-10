@@ -116,22 +116,38 @@ class MockResponse {
   }
 }
 
+// Defaults describe a legitimate same-origin request from the admin UI, so the
+// suite's existing cases exercise routing rather than the guards. Pass
+// `headers` to override, or null to drop a default and test a guard.
 function createMockRequest(options: {
   method: string;
   url: string;
   body?: string;
+  headers?: Record<string, string | undefined>;
 }): IncomingMessage {
   const chunks = options.body ? [Buffer.from(options.body)] : [];
+
+  const headers: Record<string, string> = {};
+  const merged = {
+    host: "localhost:3000",
+    "x-requested-with": "alexa-photos",
+    "content-type": options.body ? "application/json" : undefined,
+    ...(options.headers ?? {}),
+  };
+  for (const [name, value] of Object.entries(merged)) {
+    if (value !== undefined) headers[name.toLowerCase()] = value;
+  }
 
   return {
     method: options.method,
     url: options.url,
+    headers,
     async *[Symbol.asyncIterator]() {
       for (const chunk of chunks) {
         yield chunk;
       }
     },
-  } as IncomingMessage;
+  } as unknown as IncomingMessage;
 }
 
 async function request(
@@ -140,12 +156,14 @@ async function request(
     method?: string;
     url: string;
     body?: string;
+    headers?: Record<string, string | undefined>;
   },
 ): Promise<MockResponse> {
   const req = createMockRequest({
     method: options.method ?? "GET",
     url: options.url,
     body: options.body,
+    headers: options.headers,
   });
   const res = new MockResponse();
 
@@ -448,22 +466,6 @@ describe("GET /api/links", () => {
     expect(res.json()).toEqual({ error: "Links are not configured" });
   });
 
-  it("is not readable cross-origin", async () => {
-    // The response carries the iCloud album token, a capability URL. The
-    // router's blanket wildcard would hand it to any site the admin visits.
-    amazonClient.findAlbum.mockResolvedValue({
-      id: "node-42",
-      name: "Echo Show",
-    });
-
-    const res = await request(serverWithLinks(), { url: "/api/links" });
-    const mappings = await request(serverWithLinks(), { url: "/metrics" });
-
-    expect(res.getHeader("Access-Control-Allow-Origin")).toBeUndefined();
-    // Still set for the routes that carry nothing sensitive.
-    expect(mappings.getHeader("Access-Control-Allow-Origin")).toBe("*");
-  });
-
   it("caches a hit so repeat requests do not re-query Amazon", async () => {
     amazonClient.findAlbum.mockResolvedValue({
       id: "node-42",
@@ -511,6 +513,248 @@ describe("GET /api/links", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("request guards", () => {
+  function bareServer(overrides = {}) {
+    return new AppServer({ port: 0, staticDir: "/nonexistent", ...overrides });
+  }
+
+  describe("CORS", () => {
+    it("sends no Access-Control headers on any response", async () => {
+      // The admin UI is same-origin in prod and dev, so nothing needs CORS —
+      // and the wildcard that used to be here made every mutating endpoint
+      // drivable and readable by any page the admin visited.
+      const server = bareServer();
+
+      for (const url of [
+        "/metrics",
+        "/health",
+        "/api/amazon/status",
+        "/nope",
+      ]) {
+        const res = await request(server, { url });
+        expect(res.getHeader("Access-Control-Allow-Origin")).toBeUndefined();
+        expect(res.getHeader("Access-Control-Allow-Methods")).toBeUndefined();
+        expect(res.getHeader("Access-Control-Allow-Headers")).toBeUndefined();
+      }
+    });
+
+    it("refuses preflight instead of blanket-approving it", async () => {
+      const res = await request(bareServer(), {
+        method: "OPTIONS",
+        url: "/api/sync",
+      });
+
+      expect(res.statusCode).toBe(405);
+      // Must not fall through to the SPA: serveStaticFile ignores the method.
+      expect(res.text()).not.toContain("<html");
+    });
+  });
+
+  describe("CSRF header", () => {
+    it("rejects a state-changing request that omits it", async () => {
+      const onSyncRequested = vi.fn();
+      const server = bareServer({ onSyncRequested });
+
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/sync",
+        headers: { "x-requested-with": undefined },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(onSyncRequested).not.toHaveBeenCalled();
+    });
+
+    it("rejects a wrong value", async () => {
+      const onSyncRequested = vi.fn();
+      const res = await request(bareServer({ onSyncRequested }), {
+        method: "POST",
+        url: "/api/sync",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(onSyncRequested).not.toHaveBeenCalled();
+    });
+
+    it("allows the request when present", async () => {
+      const onSyncRequested = vi.fn();
+      const res = await request(bareServer({ onSyncRequested }), {
+        method: "POST",
+        url: "/api/sync",
+      });
+
+      expect(res.statusCode).toBe(202);
+      expect(onSyncRequested).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not require it on reads", async () => {
+      const res = await request(bareServer(), {
+        url: "/metrics",
+        headers: { "x-requested-with": undefined },
+      });
+
+      expect(res.statusCode).toBe(200);
+    });
+
+    it("protects DELETE, leaving the row intact", async () => {
+      const store = new StateStore();
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "sum-1",
+        amazonId: "am-1",
+      });
+      const server = new AppServer({
+        port: 0,
+        staticDir: "/nonexistent",
+        state: store,
+      });
+
+      const res = await request(server, {
+        method: "DELETE",
+        url: "/api/mappings/ic-1",
+        headers: { "x-requested-with": undefined },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(store.getMapping("ic-1")).not.toBeNull();
+      store.close();
+    });
+  });
+
+  describe("Host allowlist", () => {
+    it("rejects an unrecognised hostname and names the fix", async () => {
+      // DNS rebinding: an attacker domain resolving here is same-origin to the
+      // browser, so CORS cannot help. The Host header still carries their name.
+      const res = await request(bareServer(), {
+        url: "/api/amazon/status",
+        headers: { host: "evil.com" },
+      });
+
+      expect(res.statusCode).toBe(403);
+      const { error } = res.json() as { error: string };
+      expect(error).toContain("evil.com");
+      expect(error).toContain("ADMIN_ALLOWED_HOSTS");
+    });
+
+    it("allows loopback, IP literals, and a missing Host", async () => {
+      const server = bareServer();
+
+      for (const host of [
+        "localhost:3000",
+        "127.0.0.1:3000",
+        "192.168.1.50:3000",
+        "[::1]:3000",
+        undefined,
+      ]) {
+        const res = await request(server, {
+          url: "/metrics",
+          headers: { host },
+        });
+        expect(res.statusCode, `host: ${host}`).toBe(200);
+      }
+    });
+
+    it("allows a configured hostname, with or without port, any case", async () => {
+      // This is what keeps hostname-based deployments working.
+      const server = bareServer({ allowedHosts: ["photos.example.com"] });
+
+      for (const host of [
+        "photos.example.com",
+        "photos.example.com:3000",
+        "PHOTOS.EXAMPLE.COM:3000",
+      ]) {
+        const res = await request(server, {
+          url: "/metrics",
+          headers: { host },
+        });
+        expect(res.statusCode, `host: ${host}`).toBe(200);
+      }
+
+      const blocked = await request(server, {
+        url: "/metrics",
+        headers: { host: "evil.com" },
+      });
+      expect(blocked.statusCode).toBe(403);
+    });
+
+    it("guards the Host before anything else runs", async () => {
+      const onSyncRequested = vi.fn();
+      const res = await request(bareServer({ onSyncRequested }), {
+        method: "POST",
+        url: "/api/sync",
+        headers: { host: "evil.com" },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(onSyncRequested).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("request bodies", () => {
+    function serverWithStore() {
+      const store = new StateStore();
+      store.addMapping({
+        icloudId: "ic-1",
+        icloudChecksum: "sum-1",
+        amazonId: "am-1",
+      });
+      return {
+        store,
+        server: new AppServer({
+          port: 0,
+          staticDir: "/nonexistent",
+          state: store,
+        }),
+      };
+    }
+
+    it("rejects a non-JSON content type on bulk-delete", async () => {
+      // text/plain is a CORS-simple request, so it skips preflight entirely.
+      const { store, server } = serverWithStore();
+
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/mappings/bulk-delete",
+        body: JSON.stringify({ icloudIds: ["ic-1"] }),
+        headers: { "content-type": "text/plain" },
+      });
+
+      expect(res.statusCode).toBe(415);
+      expect(store.getMapping("ic-1")).not.toBeNull();
+      store.close();
+    });
+
+    it("accepts application/json with a charset suffix", async () => {
+      const { store, server } = serverWithStore();
+
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/mappings/bulk-delete",
+        body: JSON.stringify({ icloudIds: ["ic-1"] }),
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 1 });
+      store.close();
+    });
+
+    it("rejects an oversized body with 413", async () => {
+      const { store, server } = serverWithStore();
+
+      const res = await request(server, {
+        method: "POST",
+        url: "/api/mappings/bulk-delete",
+        body: "x".repeat(1024 * 1024 + 1),
+      });
+
+      expect(res.statusCode).toBe(413);
+      store.close();
+    });
   });
 });
 

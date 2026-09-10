@@ -27,6 +27,12 @@ async function main() {
     "Starting sync service",
   );
 
+  if (config.adminAllowedHosts.length === 0) {
+    logger.warn(
+      "Admin UI is reachable only via localhost or an IP address; set ADMIN_ALLOWED_HOSTS to reach it by hostname",
+    );
+  }
+
   const icloud = new ICloudClient(config.icloudAlbumToken);
 
   const state = new StateStore();
@@ -78,6 +84,7 @@ async function main() {
       timeoutMs: config.amazonRegistrationTimeoutMs,
       adminPort: config.serverPort,
     },
+    allowedHosts: config.adminAllowedHosts,
     linkSettings: {
       githubUrl: config.githubUrl,
       icloudAlbumToken: config.icloudAlbumToken,
