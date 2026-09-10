@@ -1,4 +1,5 @@
 import "dotenv/config";
+import * as fs from "fs";
 import { logger as rootLogger } from "./lib/logger.js";
 
 const logger = rootLogger.child({ component: "main" });
@@ -14,7 +15,36 @@ import { createSyncScheduler } from "./lifecycle/scheduler.js";
 import { registerShutdownHandlers } from "./lifecycle/shutdown.js";
 import { runStartupSequence } from "./lifecycle/startup.js";
 
+/**
+ * Tell anyone upgrading that their old credentials are inert.
+ *
+ * Aliasing the old setting would be worse than ignoring it: every cookie file
+ * predates device registration, so pointing the loader at one only produces a
+ * confusing failure instead of a clear instruction.
+ */
+function warnAboutLegacyCookieSetup(): void {
+  const legacyPath =
+    process.env.AMAZON_COOKIES_PATH ?? "./data/amazon-cookies.json";
+  const envSet = Boolean(process.env.AMAZON_COOKIES_PATH);
+
+  let fileExists: boolean;
+  try {
+    fileExists = fs.existsSync(legacyPath);
+  } catch {
+    fileExists = false;
+  }
+
+  if (!envSet && !fileExists) return;
+
+  logger.warn(
+    { path: legacyPath, envSet, fileExists },
+    "Found a manual Amazon cookie file or AMAZON_COOKIES_PATH. Both are ignored now: register a device at /amazon. The old file can be deleted.",
+  );
+}
+
 async function main() {
+  warnAboutLegacyCookieSetup();
+
   logger.info(
     {
       pollIntervalSeconds: config.pollIntervalMs / 1000,
@@ -36,7 +66,6 @@ async function main() {
   try {
     amazon = await AmazonClient.load({
       authPath: config.amazonAuthPath,
-      cookiesPath: config.amazonCookiesPath,
       autoRefresh: config.amazonAutoRefreshCookies,
       notificationService: notifications,
       cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
@@ -54,7 +83,6 @@ async function main() {
     logger.warn(
       {
         authPath: config.amazonAuthPath,
-        cookiesPath: config.amazonCookiesPath,
       },
       "No Amazon credentials found at startup; start continues and syncing begins once a device is registered",
     );
@@ -66,7 +94,6 @@ async function main() {
   const health = new AppServer({
     port: config.serverPort,
     state,
-    cookiesPath: config.amazonCookiesPath,
     amazonAuthPath: config.amazonAuthPath,
     registrationSettings: {
       authPath: config.amazonAuthPath,
@@ -87,13 +114,6 @@ async function main() {
         amazonAuthenticated: authenticated,
       });
     },
-    onCookiesSaved: async () => {
-      await sync.reloadAmazonClient();
-      health.updateMetrics({
-        status: "unhealthy",
-        amazonAuthenticated: false,
-      });
-    },
     isSyncRunning: () => sync.isSyncRunning(),
   });
 
@@ -103,7 +123,7 @@ async function main() {
     sync,
     health,
     cookieRefreshIntervalMs: config.cookieRefreshIntervalMs,
-    amazonCookiesPath: config.amazonCookiesPath,
+    amazonAuthPath: config.amazonAuthPath,
   });
 
   // Re-registering replaces the credentials under the running client, so the

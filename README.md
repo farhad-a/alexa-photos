@@ -26,7 +26,7 @@ Uses the Amazon Photos REST API (no browser required).
 ### Prerequisites
 
 - iCloud shared album with "Public Website" enabled
-- Amazon Photos account (cookies from a browser session)
+- Amazon Photos account
 - Docker (for production) or Node.js 24+ (CI validates on 24 and 26)
 
 ### Development (Devcontainer)
@@ -35,7 +35,7 @@ Uses the Amazon Photos REST API (no browser required).
 2. Click "Reopen in Container" when prompted
 3. Copy `.env.example` to `.env` and fill in your values
 4. Run `npm run icloud:test` to verify iCloud access
-5. Start the app and save Amazon cookies in the web UI (`/cookies`)
+5. Start the app and register a device in the web UI (`/amazon`)
 6. Run `npm run dev` to start the sync service
 
 ### Getting Your iCloud Album Token
@@ -75,38 +75,13 @@ The proxy runs only during registration and is shut down afterwards.
 > remapped host port produces links the browser cannot follow. Keep the port on
 > your LAN: it proxies a live Amazon sign-in.
 
+> **Upgrading from cookie auth:** manual cookie entry has been removed. Any
+> existing `data/amazon-cookies.json` and `AMAZON_COOKIES_PATH` are ignored, and
+> the service logs a warning once if it finds either. Register a device at
+> `/amazon` and the old file can be deleted.
+
 Removing a registration in the UI only forgets the local credentials. The device
 stays listed in your Amazon account until you remove it at `amazon.com/mycd`.
-
-### Amazon Photos Cookies (legacy, being removed)
-
-The sync service authenticates to Amazon Photos via cookies (no passwords stored).
-
-Project layout:
-
-- `server/` — backend sync service and API
-- `web/` — React + Vite admin UI
-- repo root — workspace orchestration (`npm run ...` from root still works)
-
-1. Log in to [Amazon Photos](https://www.amazon.com/photos) in your browser
-2. Open the app's **Amazon Cookies** page (`/cookies`)
-3. Capture cookies from your browser using one of these sources:
-   - **Preferred:** the browser's current cookie store for `www.amazon.com`
-   - **Also supported:** a full `Cookie` request header string from an Amazon Photos request
-4. Paste either:
-   - a full `Cookie` header string from your browser, or
-   - a JSON object of cookie key/value pairs
-5. The app extracts and stores the Amazon auth cookies it needs:
-   - **US**: required `session-id`, `ubid-main`, `at-main`
-     - optional `x-main`, `sess-at-main`, `sst-main`, `session-token`, `session-id-time`
-   - **International**: required `session-id`, `ubid-acb{tld}`, `at-acb{tld}`
-     - optional `x-acb{tld}`, `sess-at-acb{tld}`, `sst-acb{tld}`, `session-token`, `session-id-time`
-6. Cookies are saved to `AMAZON_COOKIES_PATH` (default `./data/amazon-cookies.json`)
-
-> **Why the browser cookie store is preferred:** request headers can be slightly stale if Amazon rotates auth cookies in the response (for example, `Set-Cookie: session-token=...` on page load). The service now persists tracked response-cookie rotations automatically, but for initial manual capture the browser's current cookie jar is the safer source of truth.
-
-> **Note:** Cookies expire periodically. Re-save them in the web UI when
-> the sync service reports an authentication error.
 
 ### Production Deployment
 
@@ -152,7 +127,7 @@ docker compose logs -f
 | `npm run start`              | Run production build                                             |
 | `npm run ci`                 | Run full CI pipeline (backend + frontend + format + lint + test) |
 | `npm run icloud:test`        | Test iCloud album fetch                                          |
-| `npm run amazon:verify`      | Live-check Amazon auth + cookie rotation persistence             |
+| `npm run amazon:verify`      | Live-check the registration, auth state and cookie rotation      |
 | `npm run notifications:test` | Test notification system                                         |
 
 ### Docker
@@ -194,26 +169,31 @@ npm test           # Run tests in watch mode
 
 ## Environment Variables
 
-| Variable                        | Description                                   | Default                      |
-| ------------------------------- | --------------------------------------------- | ---------------------------- |
-| `ICLOUD_ALBUM_TOKEN`            | Token from shared album URL                   | (required)                   |
-| `ICLOUD_DOWNLOAD_MAX_RETRIES`   | Retry attempts for photo downloads            | `3`                          |
-| `AMAZON_COOKIES_PATH`           | Path to cookies JSON file                     | `./data/amazon-cookies.json` |
-| `AMAZON_ALBUM_NAME`             | Album name in Amazon Photos                   | `Echo Show`                  |
-| `AMAZON_AUTO_REFRESH_COOKIES`   | Automatically refresh expired auth tokens     | `true`                       |
-| `COOKIE_REFRESH_INTERVAL_HOURS` | Proactive auth-cookie refresh cadence (hours) | `8`                          |
-| `SYNC_DELETIONS`                | Delete from Amazon when removed from iCloud   | `true`                       |
-| `POLL_INTERVAL_SECONDS`         | Sync interval in seconds                      | `60`                         |
-| `UPLOAD_DELAY_MS`               | Delay between uploads (rate limiting)         | `0` (no delay)               |
-| `SERVER_PORT`                   | Port for health/metrics/admin HTTP server     | `3000`                       |
-| `LOG_LEVEL`                     | Logging level                                 | `info`                       |
-| `ALERT_WEBHOOK_URL`             | Webhook URL for alerts (optional)             | (none)                       |
-| `PUSHOVER_TOKEN`                | Pushover app token (optional)                 | (none)                       |
-| `PUSHOVER_USER`                 | Pushover user key (optional)                  | (none)                       |
+| Variable                        | Description                                     | Default                   |
+| ------------------------------- | ----------------------------------------------- | ------------------------- |
+| `ICLOUD_ALBUM_TOKEN`            | Token from shared album URL                     | (required)                |
+| `ICLOUD_DOWNLOAD_MAX_RETRIES`   | Retry attempts for photo downloads              | `3`                       |
+| `AMAZON_ALBUM_NAME`             | Album name in Amazon Photos                     | `Echo Show`               |
+| `AMAZON_AUTH_PATH`              | Registration + session credential store         | `./data/amazon-auth.json` |
+| `AMAZON_MARKETPLACE`            | Amazon site to register against                 | `amazon.com`              |
+| `AMAZON_DEVICE_APP_NAME`        | Device name shown at amazon.com/mycd            | `alexa-photos`            |
+| `AMAZON_PROXY_OWN_IP`           | LAN IP for the login proxy (required in Docker) | (auto-detected)           |
+| `AMAZON_PROXY_PORT`             | Login proxy port (publish host:container 1:1)   | `3456`                    |
+| `AMAZON_COOKIE_MAX_AGE_DAYS`    | Refresh cookies once older than this            | `7`                       |
+| `AMAZON_AUTO_REFRESH_COOKIES`   | Automatically refresh expired auth tokens       | `true`                    |
+| `COOKIE_REFRESH_INTERVAL_HOURS` | How often cookie freshness is checked (hours)   | `12`                      |
+| `SYNC_DELETIONS`                | Delete from Amazon when removed from iCloud     | `true`                    |
+| `POLL_INTERVAL_SECONDS`         | Sync interval in seconds                        | `60`                      |
+| `UPLOAD_DELAY_MS`               | Delay between uploads (rate limiting)           | `0` (no delay)            |
+| `SERVER_PORT`                   | Port for health/metrics/admin HTTP server       | `3000`                    |
+| `LOG_LEVEL`                     | Logging level                                   | `info`                    |
+| `ALERT_WEBHOOK_URL`             | Webhook URL for alerts (optional)               | (none)                    |
+| `PUSHOVER_TOKEN`                | Pushover app token (optional)                   | (none)                    |
+| `PUSHOVER_USER`                 | Pushover user key (optional)                    | (none)                    |
 
 ## Notifications
 
-The service can send alerts when critical errors occur, such as when cookie refresh fails and manual re-authentication is required.
+The service can send alerts when critical errors occur, such as when a refresh fails or the device registration is rejected and you need to register again.
 
 **Two notification methods are supported:**
 
@@ -242,7 +222,7 @@ ALERT_WEBHOOK_URL=https://your-webhook-url
 {
   "service": "alexa-photos",
   "level": "error",
-  "message": "Amazon Photos cookies expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
+  "message": "Amazon device registration is no longer valid. Re-register in the Alexa Photos web UI.",
   "timestamp": "2026-02-09T10:00:00.000Z",
   "details": {}
 }
@@ -388,36 +368,6 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
     curl http://localhost:3000/metrics
     ```
 
-- `GET /api/cookies`
-  - Read current cookies state
-  - Returns `exists`, masked `cookies`, detected `tld`, `region`, `presentKeys`, and `missingKeys`
-  - Example:
-    ```bash
-    curl http://localhost:3000/api/cookies
-    ```
-
-- `POST /api/cookies`
-  - Save cookies from either form:
-    - `{ "cookieString": "..." }`
-    - `{ "cookies": { "key": "value" } }`
-  - Prefers browser-cookie-store values when available; request-header values are accepted too
-  - Calls optional post-save hook used by the sync service
-  - Response: `{ saved: true, ...cookieState }`
-  - Example:
-    ```bash
-    curl -X POST http://localhost:3000/api/cookies \
-      -H "Content-Type: application/json" \
-      -d '{"cookieString": "session-id=...; ubid-main=...; at-main=...; sess-at-main=...; sst-main=..."}'
-    ```
-
-- `POST /api/cookies/test`
-  - Test cookies against Amazon auth endpoint
-  - Response includes `authenticated` and `error` on failure
-  - Example:
-    ```bash
-    curl -X POST http://localhost:3000/api/cookies/test
-    ```
-
 - `GET /api/mappings`
   - List mappings with optional query params:
     - `page` (default `1`)
@@ -451,6 +401,33 @@ Base URL is `http://localhost:3000` by default (`SERVER_PORT`).
     curl -X DELETE http://localhost:3000/api/mappings/icloud-abc-123
     ```
 
+- `GET /api/amazon/status`
+  - Registration state, marketplace, masked device serial, cookie age
+  - Returns `{ registered: false }` with a `200` when no device is registered
+
+    ```bash
+    curl http://localhost:3000/api/amazon/status
+    ```
+
+- `POST /api/amazon/registration/start`
+  - Starts the login proxy, returns `{ proxyUrl, expiresAt }`
+  - `409` if a registration is already running, `400` if the proxy address is unusable
+
+- `GET /api/amazon/registration/status`
+  - Poll target while signing in
+
+- `POST /api/amazon/registration/cancel`
+  - Stops the login proxy
+
+- `DELETE /api/amazon/registration`
+  - Forgets the local registration. Does **not** deregister the device at Amazon
+
+- `POST /api/amazon/auth/test`
+  - Checks the stored credentials against Amazon
+
+- `POST /api/amazon/auth/refresh`
+  - Forces a refresh, bypassing the age gate
+
 ### Error Handling Notes
 
 - Invalid request payloads return `400` with an `error` message.
@@ -462,8 +439,8 @@ A web-based admin interface is available at `http://localhost:3000/`. Use it to:
 
 - Browse, search, and paginate photo mappings (iCloud ↔ Amazon Photos)
 - Delete individual mappings or bulk-delete selected mappings to force a resync
-- View and manage Amazon authentication cookies
-- Test current cookie auth status against Amazon
+- Register this app with Amazon and see registration status
+- Test authentication and force a cookie refresh
 
 The frontend lives in `web/` (React + Vite), the backend lives in `server/`, and production assets are served by the backend from `web/dist`.
 
@@ -494,17 +471,24 @@ UPLOAD_DELAY_MS=1000
 
 ## Troubleshooting
 
-### Amazon Cookies Expired
+### Amazon Authentication Failing
 
-The service automatically attempts to refresh expired authentication tokens using session cookies (`sess-at-*`, `sst-*`, plus optional `x-*`, `session-token`, and `session-id-time` when present). It also runs proactive refreshes on a timer (`COOKIE_REFRESH_INTERVAL_HOURS`, default `8`) to keep cookies fresh before they expire.
+Cookies are minted from the device token and refreshed automatically before
+they expire, so this should be rare. When it does happen, the cause matters:
 
-In addition, when Amazon responses include tracked auth cookies via HTTP `Set-Cookie` headers, the service selectively persists those rotated values back to `AMAZON_COOKIES_PATH`. This keeps the saved cookie file aligned with the live session more like a normal browser cookie jar.
+- **A transient failure** is retried. The service alerts and keeps going.
+- **A rejected refresh token** is not retried, because retrying cannot help. It
+  means the device was deregistered or the account password changed. The
+  service alerts once and the Amazon Account page shows the registration as
+  revoked. Register again at `/amazon`.
 
-If automatic refresh still fails, the service will send an alert (if notifications are configured) and you'll need to update cookies in the Alexa Photos web UI.
+If the service was offline longer than the cookie lifetime, no action is
+needed: the token outlives the cookies, so it mints a fresh set on the next
+start.
 
 ### Verify Live Amazon Auth Behavior
 
-Use this when you want to validate the current saved cookies against real Amazon responses and confirm whether tracked auth cookies are being rotated and persisted:
+Use this to check the stored registration against real Amazon responses, and to confirm cookie rotation is being persisted:
 
 ```bash
 npm run amazon:verify
@@ -514,9 +498,10 @@ The command prints a JSON summary with:
 
 - current auth state and HTTP status
 - whether a normal authenticated request path was exercised
-- whether the cookies file changed during verification
-- which tracked cookie keys changed (names only, never values)
-- before/after cookie-file update timestamps
+- the marketplace, masked device serial, and when it was registered
+- how old the current cookies are, and whether a re-registration is needed
+- which cookie names are stored, and which rotated during verification
+  (names only, never values)
 
 This is intended as an integration-level smoke test against live Amazon behavior, not a unit test replacement.
 

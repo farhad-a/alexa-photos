@@ -20,12 +20,10 @@ export class AppServer {
     this.context = {
       port: options.port,
       state: options.state ?? null,
-      cookiesPath: options.cookiesPath ?? "./data/amazon-cookies.json",
       amazonAuthPath: options.amazonAuthPath ?? "./data/amazon-auth.json",
       registrationSettings: options.registrationSettings,
       startTime: new Date(),
       onAmazonAuthChecked: options.onAmazonAuthChecked,
-      onCookiesSaved: options.onCookiesSaved,
       onSyncRequested: options.onSyncRequested,
       isSyncRunning: options.isSyncRunning,
       staticDir:

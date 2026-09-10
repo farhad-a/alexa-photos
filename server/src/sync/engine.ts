@@ -273,7 +273,6 @@ export class SyncEngine {
       if (!this.amazon) {
         this.amazon = await AmazonClient.load({
           authPath: config.amazonAuthPath,
-          cookiesPath: config.amazonCookiesPath,
           autoRefresh: config.amazonAutoRefreshCookies,
           notificationService: this.notifications,
           cookieMaxAgeDays: config.amazonCookieMaxAgeDays,
@@ -352,7 +351,7 @@ export class SyncEngine {
 
       if (isCookiesMissing) {
         logger.info(
-          { path: config.amazonCookiesPath },
+          { path: config.amazonAuthPath },
           "Amazon cookies are not configured yet",
         );
         this.lastAuthStatus = {
@@ -424,7 +423,6 @@ export class SyncEngine {
     if (!this.amazon) {
       this.amazon = await AmazonClient.load({
         authPath: config.amazonAuthPath,
-        cookiesPath: config.amazonCookiesPath,
         autoRefresh: config.amazonAutoRefreshCookies,
         notificationService: this.notifications,
         cookieMaxAgeDays: config.amazonCookieMaxAgeDays,

@@ -10,7 +10,10 @@ A polling-based sync service that mirrors an iCloud shared album to Amazon Photo
 ```
 server/src/
 ├── icloud/client.ts      # iCloud shared album public API (no auth)
-├── amazon/client.ts      # Amazon Photos REST API (cookie-based auth)
+├── amazon/client.ts      # Amazon Photos REST API (cookie transport)
+├── amazon/registration.ts     # Device-registration flow behind the admin UI
+├── amazon/registration-proxy.ts # alexa-cookie2 wrapper (only importer)
+├── amazon/credentials.ts      # Auth + session credential store
 ├── sync/engine.ts        # Orchestrates diff detection and sync operations
 ├── state/store.ts        # SQLite mappings: icloud_id ↔ amazon_id
 ├── server/
@@ -19,7 +22,7 @@ server/src/
 │   ├── http.ts           # Shared request/response helpers
 │   ├── static.ts         # Static file serving + SPA fallback
 │   ├── types.ts          # Request context model
-│   ├── controllers/      # Route handlers (health, mappings, cookies)
+│   ├── controllers/      # Route handlers (health, mappings, amazon, sync)
 │   └── services/         # Shared server-side service helpers
 └── lib/
     ├── config.ts         # Zod-validated env config
@@ -29,7 +32,7 @@ server/src/
 web/
 ├── src/pages/Home.tsx     # Admin landing page
 ├── src/pages/Mappings.tsx # Photo mappings UI
-└── src/pages/Cookies.tsx  # Amazon cookie management UI
+└── src/pages/Amazon.tsx   # Amazon account + device registration UI
 ```
 
 ## Key Patterns & Conventions
@@ -53,7 +56,7 @@ web/
 - Optional alerting via `ALERT_WEBHOOK_URL` or `PUSHOVER_TOKEN`/`PUSHOVER_USER`
 - Implementation in [server/src/lib/notifications.ts](server/src/lib/notifications.ts)
 - **Throttling**: Duplicate alerts throttled (default 60 minutes, configurable via `NOTIFICATION_THROTTLE_MINUTES`; `-1` = throttle indefinitely until process restart). Per-call `skipThrottle` bypasses throttling for one-off operational events (e.g. sync summaries)
-- Cookie refresh failures trigger alerts via callback from SyncEngine → AmazonClient
+- Refresh failures trigger alerts via `NotificationService`. A rejected refresh token is a distinct, sticky state: it means the device was deregistered or the password changed, so it alerts once and asks for re-registration rather than retrying
 
 ## Platform Clients
 
@@ -66,14 +69,13 @@ web/
 
 ### AmazonClient ([server/src/amazon/client.ts](server/src/amazon/client.ts))
 
-- **Auth**: Cookie-based — cookies stored in `./data/amazon-cookies.json`
+- **Auth**: Device registration. A one-time browser sign-in yields a durable `Atnr|` refresh token; the client mints its own cookies from it. Stored in `./data/amazon-auth.json` (durable, mode 0600) and `./data/amazon-session.json` (rotating cookies)
 - **Ported from**: [trevorhobenshield/amazon_photos](https://github.com/trevorhobenshield/amazon_photos) Python library
 - **Base URL**: `https://www.amazon.{tld}/drive/v1`
 - **Upload endpoint**: `https://content-na.drive.amazonaws.com/cdproxy/nodes`
 - **Base params**: `{ asset: 'ALL', tempLink: 'false', resourceVersion: 'V2', ContentType: 'JSON' }`
-- **TLD detection**: Auto-detected from cookie key names (`at-main`/`at_main` → US, `at-acb{tld}` → intl)
-- **Required US cookies**: `session-id`, `ubid-main`, `at-main`
-- **Optional US cookies**: `x-main`, `sess-at-main`, `sst-main` (improve refresh reliability)
+- **Marketplace**: Comes from the registration record. `detectTld()` survives only as a mismatch warning, which is what catches a registration made against the wrong Amazon site
+- **Refresh**: Age-gated. Cookies live ~14 days, so a proactive call on a young set is a no-op; anything driven by a 401 passes `force`, and forced refreshes are throttled to one a minute to avoid tripping bot detection
 - **Retry**: Exponential backoff with jitter, up to 3 retries. 401 → immediate auth error. 409 → conflict (duplicate), not an error.
 
 ### SyncEngine ([server/src/sync/engine.ts](server/src/sync/engine.ts))
@@ -106,8 +108,8 @@ web/
 # Test iCloud fetch (validates album token)
 ICLOUD_ALBUM_TOKEN=xxx npm run icloud:test
 
-# Save Amazon cookies (one-time or when auth expires)
-# Use the web UI at /cookies
+# Register the device with Amazon (one-time)
+# Use the web UI at /amazon
 
 # Run sync service in watch mode
 npm run dev
@@ -129,14 +131,15 @@ npm run ci
 ## Deployment
 
 - **Docker**: `node:26-slim` base image (no browser dependencies needed). Multi-stage: the builder installs deps once with `--ignore-scripts`, builds, runs `npm prune --omit=dev`, and the runtime stage copies `node_modules` — one install, and no npm cache left in the final layer
-- **Persistent state**: `./data/` directory contains SQLite DB + cookies file — mount as volume
-- **Cookie expiry**: Service auto-refreshes using `sess-at-main`/`sst-main`, with proactive interval controlled by `COOKIE_REFRESH_INTERVAL_HOURS` (default: 8). If refresh fails, alerts via webhook/Pushover
+- **Persistent state**: `./data/` holds the SQLite DB plus the auth and session files — mount as volume. `amazon-auth.json` is the one artifact that needs a human with a browser to recreate
+- **Cookie expiry**: Cookies are minted from the device token and refreshed automatically. `COOKIE_REFRESH_INTERVAL_HOURS` (default: 12) is how often freshness is _checked_; `AMAZON_COOKIE_MAX_AGE_DAYS` (default: 7) is when a refresh actually happens. A restart re-checks age, which is what really keeps cookies alive on a box that reboots nightly
+- **Login proxy**: Registration runs a temporary proxy on `AMAZON_PROXY_PORT` (default 3456). Publish it with **matching host and container ports** — the proxy rewrites Amazon's pages to embed that address. `AMAZON_PROXY_OWN_IP` is **required in Docker**: auto-detection returns the bridge address, which no browser can reach, and the proxy still appears to start
 - **Health endpoints**: `/health` and `/metrics` for Docker health checks and monitoring
 - **Admin UI**: `http://localhost:3000/` — React UI served by backend (`web/dist`)
   - Home dashboard (`/`) with links to feature pages
   - Photo mappings (`/mappings`): search, paginate, single-delete, bulk-delete
-  - Amazon cookies (`/cookies`): view/save/test auth cookies
-- **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/cookies/test`.
+  - Amazon account (`/amazon`): register a device, test auth, force a refresh
+- **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/amazon/auth/test`.
 
 ## Important Notes & Gotchas
 
@@ -144,7 +147,7 @@ npm run ci
 - **iCloud polling**: Public API has no webhooks — polling is the only option
 - **Album filter quirk**: The `/nodes` API `name:` filter breaks on multi-word names. We fetch all albums and filter locally in `findAlbum()`
 - **Search vs nodes**: The `/search` endpoint does NOT support `kind:` filter (returns 400). Use `/nodes` for album queries
-- **Cookie key format**: Browser DevTools shows hyphens (`at-main`), some libraries use underscores (`at_main`). TLD detection handles both
+- **alexa-cookie2 quirks** (all confirmed live): its callback fires more than once on the proxy path — the first call is a progress notice delivered through the _error_ argument, so a naive settled-guard tears the proxy down before anyone can log in. It is CommonJS exporting a runtime-built object, so a named ESM import compiles and then throws; use the default import. And it defaults to the **German** marketplace, so marketplace options must be passed on every call, not just registration
 - **Date parsing**: iCloud API returns ISO strings for some photos, Apple epoch timestamps for others. Client handles both
 - **Docker `--ignore-scripts`** (don't remove): npm runs `node-gyp rebuild` for any package with a `binding.gyp`, and `node:*-slim` has no python/make/g++ — so a plain `npm ci` fails on better-sqlite3. Installing the toolchain is not the fix: better-sqlite3 v13 bundles prebuilt N-API binaries (`prebuilds/linux-{x64,arm64}.node`) and its `binding.gyp` sets both targets to `type: none` when a prebuild exists, so node-gyp compiles **nothing** either way — the toolchain adds 263MB to the builder for zero output. Only `--build-from-source` (`force_build=1`) actually compiles
 - **Native module build guard**: `--ignore-scripts` fails silently, and better-sqlite3 only ships prebuilds for x64/arm64. The Dockerfile asserts the binary loads (`node -e "new (require('better-sqlite3'))(':memory:')..."`) after pruning, so a platform without a prebuild (e.g. adding `linux/arm/v7`) fails the build instead of producing a container that crashes on start. If that ever fires, add `python3 make g++` to the builder stage — that's the case where compiling is genuinely needed
@@ -164,7 +167,7 @@ npm run ci
 ## Design Decisions
 
 1. **REST API over Playwright**: Playwright couldn't run headless in devcontainer. Ported undocumented Amazon Drive v1 API from Python library instead.
-2. **Cookie auth over OAuth**: Amazon Photos has no public OAuth API. Browser cookies work reliably.
+2. **Device registration over manual cookies**: Amazon Photos has no public OAuth API. Pasted browser cookies died within minutes because the refresh was seeded with a browser-session token rather than a durable one. Registering a device yields a real refresh token; cookies are still the transport, but they are now minted rather than copied.
 3. **Polling over webhooks**: iCloud has no webhook/push support.
 4. **Native photo frame**: Uses Amazon Photos album directly so Echo Show uses built-in photo frame UX.
 5. **Local album filter**: API `name:` filter breaks on multi-word names — fetch all, filter locally.

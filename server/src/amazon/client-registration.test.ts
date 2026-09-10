@@ -177,6 +177,19 @@ describe("minted cookies", () => {
     expect(writes.writeAmazonSession).not.toHaveBeenCalled();
   });
 
+  it("rejects a refresh that returns cookies but no access token", async () => {
+    // The legacy exchange checked this. Without it a response like this would
+    // pass here and then fail on the very next request.
+    proxy.refreshRegistration.mockResolvedValue({
+      refreshToken: "Atnr|original",
+      localCookie: "session-id=s; ubid-main=u",
+    });
+    const client = makeClient({ cookiesUpdatedAt: daysAgo(9) });
+
+    await expect(client.refreshNow()).resolves.toBe(false);
+    expect(writes.writeAmazonSession).not.toHaveBeenCalled();
+  });
+
   it("persists a rotated refresh token so the registration is not stranded", async () => {
     proxy.refreshRegistration.mockResolvedValue({
       refreshToken: "Atnr|rotated",
@@ -380,40 +393,35 @@ describe("AmazonClient.load", () => {
 
   it("uses the registration when one exists", async () => {
     await writeAuthFile();
-    const client = await AmazonClient.load({ authPath, cookiesPath });
+    const client = await AmazonClient.load({ authPath });
     expect(client.isRegistered).toBe(true);
   });
 
-  it("prefers the registration over a leftover cookie file", async () => {
-    await writeAuthFile();
+  it("ignores a leftover cookie file entirely", async () => {
     await writeCookieFile();
-    const client = await AmazonClient.load({ authPath, cookiesPath });
-    expect(client.isRegistered).toBe(true);
+    // There is no cookie fallback any more. An install carrying only the old
+    // file is unconfigured and must register.
+    await expect(AmazonClient.load({ authPath })).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
-  it("falls back to the cookie file so upgrades keep running", async () => {
-    await writeCookieFile();
-    const client = await AmazonClient.load({ authPath, cookiesPath });
-    expect(client.isRegistered).toBe(false);
-  });
-
-  it("falls back rather than bricking when the registration is corrupt", async () => {
+  it("reports a corrupt registration as unconfigured rather than bricking", async () => {
     await fs.writeFile(authPath, "{ not json");
-    await writeCookieFile();
 
-    const client = await AmazonClient.load({ authPath, cookiesPath });
-
-    expect(client.isRegistered).toBe(false);
+    // A home server that will not boot is worse than one asking to be
+    // re-registered, so this must not throw a raw parse error.
+    await expect(AmazonClient.load({ authPath })).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({ path: authPath }),
-      expect.stringContaining("falling back"),
+      expect.stringContaining("not configured"),
     );
   });
 
   it("reports ENOENT when nothing is configured, which startup reads as not configured", async () => {
-    await expect(
-      AmazonClient.load({ authPath, cookiesPath }),
-    ).rejects.toMatchObject({
+    await expect(AmazonClient.load({ authPath })).rejects.toMatchObject({
       code: "ENOENT",
     });
   });

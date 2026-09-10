@@ -10,12 +10,10 @@ export interface HealthMetrics extends SyncMetrics {
 export interface AppServerOptions {
   port: number;
   state?: StateStore;
-  cookiesPath?: string;
   amazonAuthPath?: string;
   registrationSettings?: RegistrationSettings;
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
-  onCookiesSaved?: () => void | Promise<void>;
   onSyncRequested?: () => void | Promise<void>;
   isSyncRunning?: () => boolean;
 }
@@ -30,12 +28,10 @@ export interface AppRequestContext {
   startTime: Date;
   metrics: HealthMetrics;
   state: StateStore | null;
-  cookiesPath: string;
   amazonAuthPath: string;
   registrationSettings?: RegistrationSettings;
   staticDir: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
-  onCookiesSaved?: () => void | Promise<void>;
   onSyncRequested?: () => void | Promise<void>;
   isSyncRunning?: () => boolean;
 }

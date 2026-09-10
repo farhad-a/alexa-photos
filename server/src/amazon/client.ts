@@ -2,15 +2,13 @@ import { logger as rootLogger } from "../lib/logger.js";
 
 const logger = rootLogger.child({ component: "amazon" });
 import { createHash } from "crypto";
-import * as fs from "fs/promises";
 import { NotificationService } from "../lib/notifications.js";
 import {
   detectTld,
   extractTrackedSetCookies,
-  getCookieKeyCandidates,
   isAccessTokenCookieName,
   isTrackedAuthCookieName,
-} from "./cookies.js";
+} from "./cookie-names.js";
 import {
   ProviderErrorStatus,
   classifyAmazonAuthError,
@@ -34,8 +32,6 @@ import { refreshRegistration } from "./registration-proxy.js";
  * Ported from: https://github.com/trevorhobenshield/amazon_photos
  * Uses the undocumented Amazon Drive v1 API with cookie-based authentication.
  */
-
-const COOKIES_PATH = "./data/amazon-cookies.json";
 
 const NORTH_AMERICA_TLDS = new Set(["com", "ca", "com.mx", "com.br"]);
 
@@ -107,7 +103,6 @@ export class AmazonClient {
   private baseParams: Record<string, string>;
   private sessionId: string | undefined;
   private rootNodeId: string | null = null;
-  private cookiesPath: string;
   private autoRefresh: boolean;
   private notificationService?: NotificationService;
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -129,7 +124,6 @@ export class AmazonClient {
   constructor(
     cookies: AmazonCookies,
     options: {
-      cookiesPath?: string;
       autoRefresh?: boolean;
       notificationService?: NotificationService;
       auth?: AmazonAuthRecord;
@@ -151,7 +145,6 @@ export class AmazonClient {
     this.driveUrl = `https://www.amazon.${this.tld}/drive/v1`;
     this.cdproxyUrl = this.determineCdproxy();
     this.sessionId = cookies["session-id"];
-    this.cookiesPath = options.cookiesPath || COOKIES_PATH;
     this.autoRefresh = options.autoRefresh ?? true;
     this.notificationService = options.notificationService;
     this.baseParams = {
@@ -160,40 +153,6 @@ export class AmazonClient {
       resourceVersion: "V2",
       ContentType: "JSON",
     };
-  }
-
-  /**
-   * Load cookies from JSON file on disk.
-   *
-   * Expected format (US):
-   * ```json
-   * {
-   *   "session-id": "...",
-   *   "ubid-main": "...",
-   *   "at-main": "...",
-   *   "x-main": "...",
-   *   "sess-at-main": "...",
-   *   "sst-main": "..."
-   * }
-   * ```
-   */
-  static async fromFile(
-    cookiePath = COOKIES_PATH,
-    autoRefresh = true,
-    notificationService?: NotificationService,
-  ): Promise<AmazonClient> {
-    logger.debug({ path: cookiePath }, "Loading cookies from file");
-    const raw = await fs.readFile(cookiePath, "utf-8");
-    const cookies = JSON.parse(raw) as AmazonCookies;
-    logger.debug(
-      { path: cookiePath, cookieCount: Object.keys(cookies).length },
-      "Cookies loaded",
-    );
-    return new AmazonClient(cookies, {
-      cookiesPath: cookiePath,
-      autoRefresh,
-      notificationService,
-    });
   }
 
   /**
@@ -236,16 +195,15 @@ export class AmazonClient {
   }
 
   /**
-   * Load a client from whichever credentials exist.
+   * Load a client from the stored device registration.
    *
-   * Prefers the device registration and falls back to the legacy cookie file,
-   * so a registration-only install works and an upgrade keeps running until it
-   * registers. When neither exists this throws with `code === "ENOENT"`, which
-   * callers read as "not configured".
+   * A missing registration throws with `code === "ENOENT"`, which callers read
+   * as "not configured". A corrupt one is reported the same way rather than
+   * thrown: a home server that will not boot is worse than one asking to be
+   * re-registered.
    */
   static async load(options: {
     authPath: string;
-    cookiesPath: string;
     autoRefresh?: boolean;
     notificationService?: NotificationService;
     cookieMaxAgeDays?: number;
@@ -258,21 +216,17 @@ export class AmazonClient {
       });
     } catch (error) {
       const code = (error as NodeJS.ErrnoException)?.code;
-      if (code !== "ENOENT") {
-        // A corrupt registration must not brick the service. Fall through and
-        // let the missing-cookie path report "not configured" instead.
-        logger.error(
-          { error, path: options.authPath },
-          "Amazon registration could not be read; falling back to the legacy cookie file",
-        );
-      }
-    }
+      if (code === "ENOENT") throw error;
 
-    return AmazonClient.fromFile(
-      options.cookiesPath,
-      options.autoRefresh ?? true,
-      options.notificationService,
-    );
+      logger.error(
+        { error, path: options.authPath },
+        "Amazon registration could not be read; reporting as not configured",
+      );
+      throw Object.assign(
+        new Error(`Amazon registration at ${options.authPath} is unreadable`),
+        { code: "ENOENT" },
+      );
+    }
   }
 
   /** True when a device registration backs this client. */
@@ -311,23 +265,6 @@ export class AmazonClient {
     return "https://content-eu.drive.amazonaws.com/cdproxy/nodes";
   }
 
-  /**
-   * Build candidate cookie key names for US (-main/_main) and international (-acb{tld}/_acb{tld}) variants.
-   */
-  private cookieKeyCandidates(prefix: string): string[] {
-    return getCookieKeyCandidates(prefix, this.tld);
-  }
-
-  /**
-   * Find the first present cookie key for a logical auth cookie family.
-   */
-  private findCookieKey(prefix: string): string | null {
-    for (const key of this.cookieKeyCandidates(prefix)) {
-      if (this.cookies[key]) return key;
-    }
-    return null;
-  }
-
   private updateSessionIdFromCookies(source: string): void {
     const nextSessionId = this.cookies["session-id"];
     if (nextSessionId && nextSessionId !== this.sessionId) {
@@ -346,22 +283,15 @@ export class AmazonClient {
   }
 
   private async persistCookies(): Promise<void> {
-    if (this.authPath) {
-      this.cookiesUpdatedAt = new Date().toISOString();
-      await writeAmazonSession(this.authPath, {
-        version: 1,
-        cookiesUpdatedAt: this.cookiesUpdatedAt,
-        lastRefreshAt: this.lastRefreshAt,
-        cookies: this.definedCookies(),
-      });
-      return;
-    }
+    if (!this.authPath) return;
 
-    await fs.writeFile(
-      this.cookiesPath,
-      JSON.stringify(this.cookies, null, 2),
-      "utf-8",
-    );
+    this.cookiesUpdatedAt = new Date().toISOString();
+    await writeAmazonSession(this.authPath, {
+      version: 1,
+      cookiesUpdatedAt: this.cookiesUpdatedAt,
+      lastRefreshAt: this.lastRefreshAt,
+      cookies: this.definedCookies(),
+    });
   }
 
   private async mergeTrackedCookies(
@@ -465,9 +395,11 @@ export class AmazonClient {
             continue; // Retry the request with new cookies
           }
         }
-        logger.error("Amazon cookies expired — update your cookies file");
+        logger.error(
+          "Amazon auth failed and could not be refreshed — re-register the device",
+        );
         throw new Error(
-          `Amazon Photos auth failed — update ${this.cookiesPath} with fresh cookies.`,
+          "Amazon Photos auth failed — re-register the device in the Alexa Photos web UI.",
         );
       }
 
@@ -491,27 +423,13 @@ export class AmazonClient {
   }
 
   /**
-   * Refresh the auth cookies. Returns true when they are usable afterwards.
-   *
-   * Dispatches on how this client was configured. Device registration is the
-   * supported path; the legacy exchange below survives only until the manual
-   * cookie flow is removed.
-   */
-  private async refreshCookies(options?: {
-    notifyOnNonAuthFailure?: boolean;
-    force?: boolean;
-  }): Promise<boolean> {
-    if (this.auth) return this.refreshViaRegistration(options);
-    return this.refreshViaLegacyExchange(options);
-  }
-
-  /**
-   * Mint fresh cookies from the stored device-registration refresh token.
+   * Refresh the auth cookies by minting a fresh set from the stored
+   * device-registration refresh token.
    *
    * Age-gated: cookies live about 14 days, so a proactive call on a young set
    * is a no-op. Anything driven by a 401 must pass `force`.
    */
-  private async refreshViaRegistration(options?: {
+  private async refreshCookies(options?: {
     notifyOnNonAuthFailure?: boolean;
     force?: boolean;
   }): Promise<boolean> {
@@ -567,6 +485,16 @@ export class AmazonClient {
       );
       if (Object.keys(minted).length === 0) {
         logger.warn("Amazon refresh returned no cookies");
+        return false;
+      }
+
+      // Cookies without an access token would pass silently here and then fail
+      // on the next request. The legacy exchange checked this; keep the check.
+      if (!Object.keys(minted).some(isAccessTokenCookieName)) {
+        logger.warn(
+          { names: Object.keys(minted).sort() },
+          "Amazon refresh returned cookies but no access token",
+        );
         return false;
       }
 
@@ -638,164 +566,6 @@ export class AmazonClient {
           "warning",
         );
       }
-      return false;
-    }
-  }
-
-  /**
-   * Legacy refresh seeded with a browser sess-at cookie.
-   *
-   * Kept only for the manual cookie path, which is being removed. The seed is
-   * a browser-session token rather than a durable refresh token, which is why
-   * manually pasted cookies died within minutes.
-   */
-  private async refreshViaLegacyExchange(options?: {
-    notifyOnNonAuthFailure?: boolean;
-  }): Promise<boolean> {
-    try {
-      // Check if we have the necessary session tokens (US and international variants)
-      const sessAtKey = this.findCookieKey("sess-at");
-      const sstKey = this.findCookieKey("sst");
-
-      const sessAt = sessAtKey ? this.cookies[sessAtKey] : undefined;
-      const sst = sstKey ? this.cookies[sstKey] : undefined;
-
-      if (!sessAt || !sst || !sessAtKey || !sstKey) {
-        logger.warn(
-          { tld: this.tld },
-          "Cannot auto-refresh: session refresh cookies not available",
-        );
-        return false;
-      }
-
-      logger.debug(
-        "Attempting to exchange session token for fresh auth cookies",
-      );
-
-      // Amazon's token exchange endpoint
-      const exchangeUrl = `https://www.amazon.${this.tld}/ap/exchangetoken/refresh`;
-
-      const formData = new URLSearchParams({
-        app_name: "Amazon Drive",
-        requested_token_type: "auth_cookies",
-        domain: `.amazon.${this.tld}`,
-        source_token_type: "refresh_token",
-        source_token: sessAt,
-      });
-
-      // Send full known cookie context to maximize refresh reliability.
-      // Amazon appears to rely on more than just sess-at/sst in some sessions.
-      const refreshCookieHeader = this.cookieHeader;
-
-      const response = await fetch(exchangeUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Cookie: refreshCookieHeader,
-          "User-Agent": this.headers["User-Agent"],
-        },
-        body: formData.toString(),
-      });
-
-      await this.persistCookiesFromResponse(
-        response,
-        "token refresh response headers",
-      );
-
-      if (!response.ok) {
-        logger.warn(
-          { status: response.status },
-          "Token refresh endpoint returned non-OK status",
-        );
-
-        // Do not assume auth is expired just because refresh failed.
-        // Verify current auth state before deciding which notification to send.
-        const authStatus = await this.checkAuthStatus().catch(() => null);
-
-        if (authStatus?.state === "unauthorized") {
-          await this.notificationService?.sendAlert(
-            "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
-            "error",
-          );
-        } else if (options?.notifyOnNonAuthFailure !== false) {
-          if (authStatus?.ok) {
-            await this.notificationService?.sendAlert(
-              "Amazon cookie auto-refresh failed, but auth is still valid. Will retry automatically.",
-              "warning",
-            );
-          } else {
-            await this.notificationService?.sendAlert(
-              "Amazon cookie auto-refresh failed and auth verification was inconclusive. Will retry automatically.",
-              "warning",
-            );
-          }
-        }
-
-        return false;
-      }
-
-      const data = await response.json();
-      const returnedCookies = data.response?.tokens?.cookies;
-
-      if (!Array.isArray(returnedCookies)) {
-        logger.warn("Token refresh response missing cookie array");
-        return false;
-      }
-
-      let updatedCookies = 0;
-      let updatedAccessToken = false;
-
-      for (const cookie of returnedCookies) {
-        const name = cookie?.Name;
-        const value = cookie?.Value;
-
-        if (typeof name !== "string" || typeof value !== "string" || !value) {
-          continue;
-        }
-
-        if (!isTrackedAuthCookieName(name)) {
-          continue;
-        }
-
-        if (this.cookies[name] !== value) {
-          this.cookies[name] = value;
-          updatedCookies += 1;
-        }
-
-        if (isAccessTokenCookieName(name)) {
-          updatedAccessToken = true;
-        }
-      }
-
-      if (!updatedAccessToken) {
-        logger.warn("Token refresh response missing access-token cookie");
-        return false;
-      }
-
-      this.updateSessionIdFromCookies("token refresh response body");
-
-      // Persist all refreshed auth cookies
-      await this.persistCookies();
-
-      logger.info(
-        { updatedCookies },
-        "Successfully refreshed Amazon auth cookies",
-      );
-
-      // Clear notification throttle so future failures trigger new alerts
-      this.notificationService?.clearAlertThrottle(
-        "Amazon auth expired and auto-refresh failed. Update cookies in the Alexa Photos web UI (Cookies tab).",
-        "error",
-      );
-
-      await this.notificationService?.sendAlert(
-        "Amazon Photos cookies refreshed successfully",
-        "info",
-      );
-
-      return true;
-    } catch (error) {
-      logger.error({ error }, "Cookie refresh failed");
       return false;
     }
   }
