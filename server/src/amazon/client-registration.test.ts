@@ -24,9 +24,17 @@ const proxy = vi.hoisted(() => ({ refreshRegistration: vi.fn() }));
 vi.mock("./registration-proxy.js", () => proxy);
 
 // Keep the pure credential helpers real; stub only the disk writes.
+//
+// Typed from the real exports so `mock.calls` carries the actual argument
+// types. An untyped vi.fn() infers zero arity, which makes calls[0][1] both
+// untypeable and unable to notice if the signature ever changes.
 const writes = vi.hoisted(() => ({
-  writeAmazonSession: vi.fn(async () => undefined),
-  writeAmazonAuth: vi.fn(async () => undefined),
+  writeAmazonSession: vi.fn<
+    (typeof import("./credentials.js"))["writeAmazonSession"]
+  >(async () => undefined),
+  writeAmazonAuth: vi.fn<
+    (typeof import("./credentials.js"))["writeAmazonAuth"]
+  >(async () => undefined),
 }));
 vi.mock("./credentials.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./credentials.js")>()),
@@ -147,9 +155,7 @@ describe("minted cookies", () => {
     await client.refreshNow();
 
     expect(writes.writeAmazonSession).toHaveBeenCalledTimes(1);
-    const record = writes.writeAmazonSession.mock.calls[0][1] as {
-      cookies: Record<string, string>;
-    };
+    const record = writes.writeAmazonSession.mock.calls[0][1];
     expect(record.cookies["at-main"]).toBe("fresh");
     expect(record.cookies["session-id"]).toBe("sess-2");
   });
@@ -163,9 +169,7 @@ describe("minted cookies", () => {
 
     await client.refreshNow();
 
-    const record = writes.writeAmazonSession.mock.calls[0][1] as {
-      cookies: Record<string, string>;
-    };
+    const record = writes.writeAmazonSession.mock.calls[0][1];
     expect(record.cookies["session-id"]).toBe("sess-1");
   });
 
@@ -200,7 +204,7 @@ describe("minted cookies", () => {
     await client.refreshNow();
 
     expect(writes.writeAmazonAuth).toHaveBeenCalledTimes(1);
-    const saved = writes.writeAmazonAuth.mock.calls[0][1] as AmazonAuthRecord;
+    const saved = writes.writeAmazonAuth.mock.calls[0][1];
     expect(saved.registration.refreshToken).toBe("Atnr|rotated");
   });
 

@@ -1,0 +1,9 @@
+// Emit config. The base tsconfig.json deliberately includes test files so that
+// `npm run typecheck` and eslint's projectService can see them, but tests must
+// never reach dist/ and from there the Docker runtime image.
+//
+// `exclude` replaces rather than merges, so node_modules and dist repeat here.
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

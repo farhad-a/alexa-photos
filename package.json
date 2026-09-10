@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm run dev -w server",
     "build": "npm run build -w server && npm run build -w web",
+    "typecheck": "npm run typecheck -w server",
     "start": "npm run start -w server",
     "test": "npm run test -w server",
     "test:run": "npm run test:run -w server",
@@ -18,7 +19,7 @@
     "format:check": "npm run format:check -w server && npm run format:check -w web",
     "web:dev": "npm run dev -w web",
     "web:build": "npm run build -w web",
-    "ci": "npm run build -w server && npm run build -w web && npm run format:check -w server && npm run format:check -w web && npm run lint -w server && npm run lint -w web && npm run test:run -w server",
+    "ci": "npm run typecheck -w server && npm run build -w server && npm run build -w web && npm run format:check -w server && npm run format:check -w web && npm run lint -w server && npm run lint -w web && npm run test:run -w server",
     "icloud:test": "npm run icloud:test -w server",
     "amazon:verify": "npm run amazon:verify -w server",
     "notifications:test": "npm run notifications:test -w server",
