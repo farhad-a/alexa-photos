@@ -1,7 +1,6 @@
 import { Routes, Route, NavLink } from "react-router-dom";
 import Home from "./pages/Home";
 import Mappings from "./pages/Mappings";
-import Cookies from "./pages/Cookies";
 import Amazon from "./pages/Amazon";
 
 export default function App() {
@@ -14,7 +13,6 @@ export default function App() {
             Home
           </NavLink>
           <NavLink to="/amazon">Amazon Account</NavLink>
-          <NavLink to="/cookies">Amazon Cookies</NavLink>
           <NavLink to="/mappings">Photo Mappings</NavLink>
         </nav>
       </aside>
@@ -22,7 +20,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/amazon" element={<Amazon />} />
-          <Route path="/cookies" element={<Cookies />} />
           <Route path="/mappings" element={<Mappings />} />
         </Routes>
       </main>

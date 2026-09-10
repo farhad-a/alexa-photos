@@ -423,43 +423,8 @@ table tr:hover td {
   background: #aaa;
 }
 
-/* Cookie page */
-.cookie-grid {
-  display: grid;
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-
-.cookie-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.cookie-row label {
-  min-width: 140px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
-}
-
-.cookie-row .value {
-  flex: 1;
-  font-size: 0.85rem;
-  font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
-  color: #666;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (prefers-color-scheme: dark) {
-  .cookie-row .value {
-    color: #aaa;
-  }
-}
-
-.cookie-status {
+/* Auth status banner */
+.auth-status {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -469,31 +434,31 @@ table tr:hover td {
   font-size: 0.9rem;
 }
 
-.cookie-status.ok {
+.auth-status.ok {
   background: #d4edda;
   color: #155724;
 }
 
-.cookie-status.error {
+.auth-status.error {
   background: #f8d7da;
   color: #721c24;
 }
 
-.cookie-status.unknown {
+.auth-status.unknown {
   background: #e9ecef;
   color: #495057;
 }
 
 @media (prefers-color-scheme: dark) {
-  .cookie-status.ok {
+  .auth-status.ok {
     background: #1a3a2a;
     color: #81c995;
   }
-  .cookie-status.error {
+  .auth-status.error {
     background: #3a1a1a;
     color: #f5a5a5;
   }
-  .cookie-status.unknown {
+  .auth-status.unknown {
     background: #333;
     color: #aaa;
   }
@@ -512,13 +477,6 @@ table tr:hover td {
   .section-header {
     border-color: #3a3a3a;
   }
-}
-
-/* Textarea for paste mode */
-textarea.cookie-paste {
-  width: 100%;
-  min-height: 80px;
-  resize: vertical;
 }
 
 /* Mappings page */

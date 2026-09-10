@@ -354,7 +354,7 @@ export default function Amazon() {
 
           {auth && (
             <div
-              className={`cookie-status ${auth.authenticated ? "ok" : "error"}`}
+              className={`auth-status ${auth.authenticated ? "ok" : "error"}`}
             >
               <span
                 className={`status-dot ${auth.authenticated ? "ok" : "error"}`}

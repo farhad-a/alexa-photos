@@ -224,11 +224,6 @@ export default function Home() {
           <p>Register this app with Amazon and check authentication status.</p>
         </Link>
 
-        <Link className="home-link" to="/cookies">
-          <h3>Amazon Cookies</h3>
-          <p>View, update, and test Amazon authentication cookies.</p>
-        </Link>
-
         <Link className="home-link" to="/mappings">
           <h3>Photo Mappings</h3>
           <p>Browse, search, and delete iCloud ↔ Amazon mapping entries.</p>
