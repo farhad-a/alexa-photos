@@ -33,7 +33,7 @@ const configSchema = z.object({
   uploadDelayMs: z.coerce.number().default(0),
   serverPort: z.coerce.number().default(3000),
   // Hostnames allowed in the Host header, beyond loopback and IP literals.
-  // Required to reach the admin UI by name — see parseAllowedHosts.
+  // Required to reach the admin UI by name — see isAllowedHost in security.ts.
   adminAllowedHosts: z
     .string()
     .default("")

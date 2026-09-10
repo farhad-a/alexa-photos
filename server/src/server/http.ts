@@ -27,11 +27,18 @@ export async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
+/** Node folds repeated headers into an array for some names; take the first. */
+export function firstHeaderValue(
+  header: string | string[] | undefined,
+): string | undefined {
+  return Array.isArray(header) ? header[0] : header;
+}
+
 /** True for `application/json`, with or without a `; charset=` suffix. */
 export function isJsonContentType(
   header: string | string[] | undefined,
 ): boolean {
-  const value = Array.isArray(header) ? header[0] : header;
+  const value = firstHeaderValue(header);
   if (!value) return false;
   return value.split(";")[0].trim().toLowerCase() === "application/json";
 }

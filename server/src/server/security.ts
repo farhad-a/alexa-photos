@@ -1,5 +1,6 @@
 import { IncomingMessage } from "http";
 import * as net from "net";
+import { firstHeaderValue } from "./http.js";
 
 /**
  * Request guards for the admin server.
@@ -81,7 +82,6 @@ export function isSafeMethod(method: string | undefined): boolean {
 }
 
 export function hasCsrfHeader(req: IncomingMessage): boolean {
-  const header = req.headers?.[CSRF_HEADER];
-  const value = Array.isArray(header) ? header[0] : header;
+  const value = firstHeaderValue(req.headers?.[CSRF_HEADER]);
   return value?.trim().toLowerCase() === CSRF_VALUE;
 }
