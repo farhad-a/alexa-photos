@@ -43,9 +43,18 @@ export interface AppLinks {
 // albums list.
 let cachedAlbumId: string | null = null;
 
+// A miss is cached too, or the normal pre-first-sync state re-fetches every
+// album from Amazon on each sidebar render. It expires rather than sticking
+// for the process lifetime: the causes are all transient — the album gets
+// created by the first sync, cookies get refreshed, bot detection relents — and
+// a permanent negative entry would pin the generic link until the next restart.
+const ALBUM_MISS_TTL_MS = 5 * 60 * 1000;
+let albumMissUntil = 0;
+
 /** Drop the cached node id. Called when the credentials change. */
 export function resetAppLinksCache(): void {
   cachedAlbumId = null;
+  albumMissUntil = 0;
 }
 
 /**
@@ -60,6 +69,7 @@ async function resolveAlbumId(
   albumName: string,
 ): Promise<string | null> {
   if (cachedAlbumId) return cachedAlbumId;
+  if (Date.now() < albumMissUntil) return null;
 
   try {
     // autoRefresh off for the same reason testAmazonAuth() turns it off:
@@ -71,12 +81,14 @@ async function resolveAlbumId(
       // findAlbum, not findOrCreateAlbum — viewing a link must never create one.
       const album = await client.findAlbum(albumName);
       cachedAlbumId = album?.id ?? null;
+      if (!cachedAlbumId) albumMissUntil = Date.now() + ALBUM_MISS_TTL_MS;
       return cachedAlbumId;
     } finally {
       await client.close();
     }
   } catch (error) {
     logger.debug({ error, albumName }, "Could not resolve Amazon album id");
+    albumMissUntil = Date.now() + ALBUM_MISS_TTL_MS;
     return null;
   }
 }

@@ -81,6 +81,10 @@ class MockResponse {
     this.headers.set(name.toLowerCase(), value);
   }
 
+  removeHeader(name: string): void {
+    this.headers.delete(name.toLowerCase());
+  }
+
   writeHead(statusCode: number, headers?: Record<string, string>): this {
     this.statusCode = statusCode;
     this.headersSent = true;
@@ -442,6 +446,71 @@ describe("GET /api/links", () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.json()).toEqual({ error: "Links are not configured" });
+  });
+
+  it("is not readable cross-origin", async () => {
+    // The response carries the iCloud album token, a capability URL. The
+    // router's blanket wildcard would hand it to any site the admin visits.
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+    const mappings = await request(serverWithLinks(), { url: "/metrics" });
+
+    expect(res.getHeader("Access-Control-Allow-Origin")).toBeUndefined();
+    // Still set for the routes that carry nothing sensitive.
+    expect(mappings.getHeader("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("caches a hit so repeat requests do not re-query Amazon", async () => {
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+    const server = serverWithLinks();
+
+    await request(server, { url: "/api/links" });
+    await request(server, { url: "/api/links" });
+
+    expect(amazonClient.findAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches a miss, so the pre-first-sync state does not refetch every render", async () => {
+    amazonClient.findAlbum.mockResolvedValue(null);
+    const server = serverWithLinks();
+
+    await request(server, { url: "/api/links" });
+    await request(server, { url: "/api/links" });
+
+    expect(amazonClient.findAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a miss once the negative entry expires", async () => {
+    // The album is created by the first sync, so a miss must not pin the
+    // generic link for the life of the process.
+    vi.useFakeTimers();
+    try {
+      amazonClient.findAlbum.mockResolvedValue(null);
+      const server = serverWithLinks();
+
+      await request(server, { url: "/api/links" });
+      vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+      amazonClient.findAlbum.mockResolvedValue({
+        id: "node-42",
+        name: "Echo Show",
+      });
+      const res = await request(server, { url: "/api/links" });
+
+      expect(amazonClient.findAlbum).toHaveBeenCalledTimes(2);
+      expect(res.json()).toMatchObject({
+        amazonAlbumUrl: "https://www.amazon.com/photos/album/node-42",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
