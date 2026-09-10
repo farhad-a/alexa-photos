@@ -9,6 +9,7 @@ import { setCredentialsChangedHandler } from "./amazon/registration.js";
 import { SyncEngine } from "./sync/engine.js";
 import { StateStore } from "./state/store.js";
 import { AppServer } from "./server/index.js";
+import { resetAppLinksCache } from "./server/services/links.js";
 import { NotificationService } from "./lib/notifications.js";
 import { createSyncScheduler } from "./lifecycle/scheduler.js";
 import { registerShutdownHandlers } from "./lifecycle/shutdown.js";
@@ -77,6 +78,12 @@ async function main() {
       timeoutMs: config.amazonRegistrationTimeoutMs,
       adminPort: config.serverPort,
     },
+    linkSettings: {
+      githubUrl: config.githubUrl,
+      icloudAlbumToken: config.icloudAlbumToken,
+      amazonAlbumName: config.amazonAlbumName,
+      amazonMarketplace: config.amazonMarketplace,
+    },
     onAmazonAuthChecked: (authenticated) => {
       sync.setAmazonAuthenticated(authenticated);
       health.updateMetrics({
@@ -100,6 +107,8 @@ async function main() {
   // engine has to drop the one it holds.
   setCredentialsChangedHandler(async () => {
     await sync.reloadAmazonClient();
+    // A different account means a different album node id.
+    resetAppLinksCache();
     health.updateMetrics({ status: "unhealthy", amazonAuthenticated: false });
   });
 

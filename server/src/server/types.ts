@@ -1,4 +1,5 @@
 import type { RegistrationSettings } from "../amazon/registration.js";
+import type { LinkSettings } from "./services/links.js";
 import { StateStore } from "../state/store.js";
 import { SyncMetrics } from "../sync/engine.js";
 
@@ -12,6 +13,7 @@ export interface AppServerOptions {
   state?: StateStore;
   amazonAuthPath?: string;
   registrationSettings?: RegistrationSettings;
+  linkSettings?: LinkSettings;
   staticDir?: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onSyncRequested?: () => void | Promise<void>;
@@ -30,6 +32,7 @@ export interface AppRequestContext {
   state: StateStore | null;
   amazonAuthPath: string;
   registrationSettings?: RegistrationSettings;
+  linkSettings?: LinkSettings;
   staticDir: string;
   onAmazonAuthChecked?: (authenticated: boolean) => void;
   onSyncRequested?: () => void | Promise<void>;

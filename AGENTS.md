@@ -30,6 +30,7 @@ server/src/
     └── notifications.ts  # Webhook/Pushover alerting
 
 web/
+├── src/components/Sidebar.tsx # Left nav + external quick links
 ├── src/pages/Home.tsx     # Admin landing page
 ├── src/pages/Mappings.tsx # Photo mappings UI
 └── src/pages/Amazon.tsx   # Amazon account + device registration UI
@@ -139,6 +140,7 @@ npm run ci
   - Home dashboard (`/`) with links to feature pages
   - Photo mappings (`/mappings`): search, paginate, single-delete, bulk-delete
   - Amazon account (`/amazon`): register a device, test auth, force a refresh
+  - Sidebar footer: external links to the iCloud shared album, the Amazon Photos album, and the GitHub repo, served by `GET /api/links`
 - **Auth metric behavior**: `amazonAuthenticated` refreshes each sync cycle and is updated immediately by `/api/amazon/auth/test`.
 
 ## Important Notes & Gotchas
@@ -147,6 +149,8 @@ npm run ci
 - **iCloud polling**: Public API has no webhooks — polling is the only option
 - **Album filter quirk**: The `/nodes` API `name:` filter breaks on multi-word names. We fetch all albums and filter locally in `findAlbum()`
 - **Search vs nodes**: The `/search` endpoint does NOT support `kind:` filter (returns 400). Use `/nodes` for album queries
+- **Blanket CORS wildcard**: [router.ts](server/src/server/router.ts) sets `Access-Control-Allow-Origin: *` on _every_ response, so any endpoint returning a secret or capability value is readable by any site the admin happens to visit. `/api/links` calls `res.removeHeader("Access-Control-Allow-Origin")` because it carries the iCloud shared-album token; do the same for any new endpoint that returns something sensitive. The admin UI is same-origin either way (served by this server in production, forwarded server-side by the Vite proxy in dev), so dropping the header costs it nothing
+- **Album node id is never persisted**: `SyncEngine.albumId` is resolved lazily and only when a sync has add/remove work, so it is `null` in steady state and reset on every auth failure. `/api/links` therefore resolves the id itself (once per process, cached in `server/services/links.ts`) rather than reading it off the engine. The `/photos/album/<nodeId>` deep-link shape is undocumented by Amazon — every `/photos/*` path redirects to signin when logged out, so it can only be verified by clicking it in a signed-in browser. Any failure falls back to `/photos/albums`
 - **alexa-cookie2 quirks** (all confirmed live): its callback fires more than once on the proxy path — the first call is a progress notice delivered through the _error_ argument, so a naive settled-guard tears the proxy down before anyone can log in. It is CommonJS exporting a runtime-built object, so a named ESM import compiles and then throws; use the default import. And it defaults to the **German** marketplace, so marketplace options must be passed on every call, not just registration
 - **Date parsing**: iCloud API returns ISO strings for some photos, Apple epoch timestamps for others. Client handles both
 - **Docker `--ignore-scripts`** (don't remove): npm runs `node-gyp rebuild` for any package with a `binding.gyp`, and `node:*-slim` has no python/make/g++ — so a plain `npm ci` fails on better-sqlite3. Installing the toolchain is not the fix: better-sqlite3 v13 bundles prebuilt N-API binaries (`prebuilds/linux-{x64,arm64}.node`) and its `binding.gyp` sets both targets to `type: none` when a prebuild exists, so node-gyp compiles **nothing** either way — the toolchain adds 263MB to the builder for zero output. Only `--build-from-source` (`force_build=1`) actually compiles

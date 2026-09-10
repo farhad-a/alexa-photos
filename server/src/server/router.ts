@@ -16,6 +16,7 @@ import {
   handleStartRegistration,
   handleTestAmazonAuth,
 } from "./controllers/amazon.js";
+import { handleAppLinks } from "./controllers/links.js";
 import { handleTriggerSync } from "./controllers/sync.js";
 import { serveStaticFile } from "./static.js";
 import { AppRequestContext } from "./types.js";
@@ -67,6 +68,11 @@ export async function handleAppRequest(
 
     if (urlPath === "/api/sync" && req.method === "POST") {
       handleTriggerSync(context, res);
+      return;
+    }
+
+    if (urlPath === "/api/links" && req.method === "GET") {
+      await handleAppLinks(context, res);
       return;
     }
 

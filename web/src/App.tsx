@@ -1,4 +1,5 @@
-import { Routes, Route, NavLink } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
+import Sidebar from "./components/Sidebar";
 import Home from "./pages/Home";
 import Mappings from "./pages/Mappings";
 import Amazon from "./pages/Amazon";
@@ -6,16 +7,7 @@ import Amazon from "./pages/Amazon";
 export default function App() {
   return (
     <div className="app">
-      <aside className="sidebar">
-        <h1>alexa-photos</h1>
-        <nav>
-          <NavLink to="/" end>
-            Home
-          </NavLink>
-          <NavLink to="/amazon">Amazon Account</NavLink>
-          <NavLink to="/mappings">Photo Mappings</NavLink>
-        </nav>
-      </aside>
+      <Sidebar />
       <main className="main">
         <Routes>
           <Route path="/" element={<Home />} />

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "http";
 import { AppServer } from "./index.js";
+import { resetAppLinksCache } from "./services/links.js";
 import { StateStore } from "../state/store.js";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -59,6 +60,17 @@ const amazonReg = vi.hoisted(() => ({
 }));
 vi.mock("../amazon/registration.js", () => amazonReg);
 
+// The links service resolves the album node id through a real client. Mock the
+// constructor-side helper so no test reaches Amazon.
+const amazonClient = vi.hoisted(() => ({
+  findAlbum: vi.fn(),
+  close: vi.fn(async () => undefined),
+  fromCredentials: vi.fn(),
+}));
+vi.mock("../amazon/client.js", () => ({
+  AmazonClient: { fromCredentials: amazonClient.fromCredentials },
+}));
+
 class MockResponse {
   statusCode = 200;
   headersSent = false;
@@ -67,6 +79,10 @@ class MockResponse {
 
   setHeader(name: string, value: string): void {
     this.headers.set(name.toLowerCase(), value);
+  }
+
+  removeHeader(name: string): void {
+    this.headers.delete(name.toLowerCase());
   }
 
   writeHead(statusCode: number, headers?: Record<string, string>): this {
@@ -331,6 +347,170 @@ describe("Amazon account API", () => {
     });
 
     expect(res.statusCode).toBe(409);
+  });
+});
+
+describe("GET /api/links", () => {
+  const LINK_SETTINGS = {
+    githubUrl: "https://github.com/farhad-a/alexa-photos",
+    icloudAlbumToken: "B0Xabc123",
+    amazonAlbumName: "Echo Show",
+    amazonMarketplace: "amazon.com",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The node id is cached for the process lifetime, so each test starts clean.
+    resetAppLinksCache();
+    amazonSvc.readAmazonStatus.mockResolvedValue({
+      registered: true,
+      state: "registered",
+    });
+    amazonClient.fromCredentials.mockResolvedValue(amazonClient);
+  });
+
+  function serverWithLinks(): AppServer {
+    return new AppServer({
+      port: 0,
+      staticDir: "/nonexistent",
+      amazonAuthPath: "./data/amazon-auth.json",
+      linkSettings: LINK_SETTINGS,
+    });
+  }
+
+  it("deep-links to the album and builds the iCloud URL from the token", async () => {
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      githubUrl: "https://github.com/farhad-a/alexa-photos",
+      icloudAlbumUrl: "https://www.icloud.com/sharedalbum/#B0Xabc123",
+      amazonAlbumUrl: "https://www.amazon.com/photos/album/node-42",
+      amazonAlbumName: "Echo Show",
+    });
+  });
+
+  it("falls back to the albums list when no device is registered", async () => {
+    // The sidebar still has to render, so a missing credential file is a
+    // degraded link, not a 500.
+    const enoent: NodeJS.ErrnoException = new Error("no such file");
+    enoent.code = "ENOENT";
+    amazonClient.fromCredentials.mockRejectedValue(enoent);
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      amazonAlbumUrl: "https://www.amazon.com/photos/albums",
+    });
+  });
+
+  it("falls back to the albums list when the album does not exist yet", async () => {
+    amazonClient.findAlbum.mockResolvedValue(null);
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      amazonAlbumUrl: "https://www.amazon.com/photos/albums",
+    });
+  });
+
+  it("prefers the registration record's marketplace over the configured one", async () => {
+    amazonSvc.readAmazonStatus.mockResolvedValue({
+      registered: true,
+      state: "registered",
+      marketplace: "amazon.co.uk",
+    });
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+
+    expect(res.json()).toMatchObject({
+      amazonAlbumUrl: "https://www.amazon.co.uk/photos/album/node-42",
+    });
+  });
+
+  it("returns 503 when links are not configured", async () => {
+    const server = new AppServer({ port: 0, staticDir: "/nonexistent" });
+
+    const res = await request(server, { url: "/api/links" });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: "Links are not configured" });
+  });
+
+  it("is not readable cross-origin", async () => {
+    // The response carries the iCloud album token, a capability URL. The
+    // router's blanket wildcard would hand it to any site the admin visits.
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+
+    const res = await request(serverWithLinks(), { url: "/api/links" });
+    const mappings = await request(serverWithLinks(), { url: "/metrics" });
+
+    expect(res.getHeader("Access-Control-Allow-Origin")).toBeUndefined();
+    // Still set for the routes that carry nothing sensitive.
+    expect(mappings.getHeader("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("caches a hit so repeat requests do not re-query Amazon", async () => {
+    amazonClient.findAlbum.mockResolvedValue({
+      id: "node-42",
+      name: "Echo Show",
+    });
+    const server = serverWithLinks();
+
+    await request(server, { url: "/api/links" });
+    await request(server, { url: "/api/links" });
+
+    expect(amazonClient.findAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches a miss, so the pre-first-sync state does not refetch every render", async () => {
+    amazonClient.findAlbum.mockResolvedValue(null);
+    const server = serverWithLinks();
+
+    await request(server, { url: "/api/links" });
+    await request(server, { url: "/api/links" });
+
+    expect(amazonClient.findAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a miss once the negative entry expires", async () => {
+    // The album is created by the first sync, so a miss must not pin the
+    // generic link for the life of the process.
+    vi.useFakeTimers();
+    try {
+      amazonClient.findAlbum.mockResolvedValue(null);
+      const server = serverWithLinks();
+
+      await request(server, { url: "/api/links" });
+      vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+
+      amazonClient.findAlbum.mockResolvedValue({
+        id: "node-42",
+        name: "Echo Show",
+      });
+      const res = await request(server, { url: "/api/links" });
+
+      expect(amazonClient.findAlbum).toHaveBeenCalledTimes(2);
+      expect(res.json()).toMatchObject({
+        amazonAlbumUrl: "https://www.amazon.com/photos/album/node-42",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
