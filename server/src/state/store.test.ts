@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
-import { StateStore, PhotoMapping } from "./store.js";
+import { StateStore } from "./store.js";
 
 // Mock the logger
 const mockLogger = vi.hoisted(() => {

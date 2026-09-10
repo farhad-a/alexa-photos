@@ -1,30 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as fs from "fs/promises";
 import { AmazonClient, AmazonCookies } from "./client.js";
-import type { NotificationService } from "../lib/notifications.js";
-
-function makeMockNotificationService(): {
-  service: NotificationService;
-  sendAlert: ReturnType<typeof vi.fn>;
-  clearAlertThrottle: ReturnType<typeof vi.fn>;
-} {
-  const sendAlert = vi.fn();
-  const clearAlertThrottle = vi.fn();
-  return {
-    service: {
-      sendAlert,
-      clearAlertThrottle,
-    } as unknown as NotificationService,
-    sendAlert,
-    clearAlertThrottle,
-  };
-}
 
 // Mock global fetch
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Mock fs for cookie persistence
+// Load-bearing despite nothing here importing fs: the credential store writes
+// the session file, and these tests exercise refresh paths that reach it.
 vi.mock("fs/promises", () => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
