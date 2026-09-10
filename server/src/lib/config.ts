@@ -32,6 +32,12 @@ const configSchema = z.object({
     .transform((s) => s * 1000),
   uploadDelayMs: z.coerce.number().default(0),
   serverPort: z.coerce.number().default(3000),
+  // Hostnames allowed in the Host header, beyond loopback and IP literals.
+  // Required to reach the admin UI by name — see isAllowedHost in security.ts.
+  adminAllowedHosts: z
+    .string()
+    .default("")
+    .transform((raw) => raw.split(",").filter((entry) => entry.trim() !== "")),
   // Shown in the admin sidebar. Override it on a fork.
   githubUrl: z.url().default("https://github.com/farhad-a/alexa-photos"),
   alertWebhookUrl: z.string().optional(),
@@ -71,6 +77,7 @@ function loadConfig(): Config {
     pollIntervalMs: process.env.POLL_INTERVAL_SECONDS,
     uploadDelayMs: process.env.UPLOAD_DELAY_MS,
     serverPort: process.env.SERVER_PORT,
+    adminAllowedHosts: process.env.ADMIN_ALLOWED_HOSTS,
     githubUrl: process.env.GITHUB_URL,
     alertWebhookUrl: process.env.ALERT_WEBHOOK_URL,
     pushoverToken: process.env.PUSHOVER_TOKEN,

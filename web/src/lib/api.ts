@@ -8,11 +8,25 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server rejects state-changing requests without this header. It is not
+ * CORS-safelisted, so a cross-origin page cannot set it without a preflight
+ * the server refuses — which is what makes it a CSRF defence.
+ */
+const CSRF_HEADER = "X-Requested-With";
+const CSRF_VALUE = "alexa-photos";
+
 async function requestJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(input, init);
+  // new Headers(...) accepts a plain object, a Headers instance, or a
+  // [key, value][] list, so a caller's headers survive regardless of shape —
+  // a plain object spread would silently drop a Headers instance's entries.
+  const headers = new Headers(init?.headers);
+  if (!headers.has(CSRF_HEADER)) headers.set(CSRF_HEADER, CSRF_VALUE);
+
+  const res = await fetch(input, { ...init, headers });
 
   let payload: unknown;
   const contentType = res.headers.get("content-type") ?? "";
