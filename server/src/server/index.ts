@@ -22,6 +22,7 @@ export class AppServer {
       state: options.state ?? null,
       amazonAuthPath: options.amazonAuthPath ?? "./data/amazon-auth.json",
       registrationSettings: options.registrationSettings,
+      linkSettings: options.linkSettings,
       startTime: new Date(),
       onAmazonAuthChecked: options.onAmazonAuthChecked,
       onSyncRequested: options.onSyncRequested,
