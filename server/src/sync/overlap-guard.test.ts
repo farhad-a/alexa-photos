@@ -20,7 +20,7 @@ vi.mock("../lib/config.js", () => ({
   config: {
     icloudAlbumToken: "test-token",
     icloudDownloadMaxRetries: 3,
-    amazonCookiesPath: "./data/amazon-cookies.json",
+    amazonAuthPath: "./data/amazon-auth.json",
     amazonAlbumName: "Echo Show",
     syncDeletions: true,
     pollIntervalMs: 60000,

@@ -107,7 +107,11 @@ export class AmazonClient {
   private notificationService?: NotificationService;
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
-  /** Device-registration credentials. Absent on the legacy cookie-file path. */
+  /**
+   * Device-registration credentials. Always present in production, since
+   * `fromCredentials` is the only construction site. Absent only when a test
+   * builds a client directly from a cookie map.
+   */
   private auth?: AmazonAuthRecord;
   private authPath?: string;
   private cookiesUpdatedAt: string | null = null;
@@ -140,8 +144,9 @@ export class AmazonClient {
     this.cookiesUpdatedAt = options.cookiesUpdatedAt ?? null;
     this.lastRefreshAt = options.lastRefreshAt ?? null;
     // The registration record is authoritative for the marketplace. Sniffing
-    // it from cookie names is a fallback for the legacy cookie-file path.
-    this.tld = options.auth?.marketplace.tld ?? this.determineTld(cookies);
+    // it from cookie names only covers a client built without one, which in
+    // practice means a test.
+    this.tld = options.auth?.marketplace.tld ?? detectTld(cookies) ?? "com";
     this.driveUrl = `https://www.amazon.${this.tld}/drive/v1`;
     this.cdproxyUrl = this.determineCdproxy();
     this.sessionId = cookies["session-id"];
@@ -247,15 +252,6 @@ export class AmazonClient {
           } as AmazonSessionRecord)
         : null,
     );
-  }
-
-  /**
-   * Determine TLD from cookie key names.
-   * US cookies: `at-main` or `at_main` (hyphen or underscore).
-   * International: `at-acb{tld}`.
-   */
-  private determineTld(cookies: AmazonCookies): string {
-    return detectTld(cookies) ?? "com";
   }
 
   private determineCdproxy(): string {

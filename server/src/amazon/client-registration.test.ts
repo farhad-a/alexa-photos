@@ -354,12 +354,10 @@ describe("marketplace", () => {
 describe("AmazonClient.load", () => {
   let dir: string;
   let authPath: string;
-  let cookiesPath: string;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), "amazon-load-"));
     authPath = path.join(dir, "amazon-auth.json");
-    cookiesPath = path.join(dir, "amazon-cookies.json");
   });
 
   afterEach(async () => {
@@ -384,23 +382,15 @@ describe("AmazonClient.load", () => {
     );
   }
 
-  async function writeCookieFile() {
-    await fs.writeFile(
-      cookiesPath,
-      JSON.stringify({ "session-id": "s", "at-main": "a", "ubid-main": "u" }),
-    );
-  }
-
   it("uses the registration when one exists", async () => {
     await writeAuthFile();
     const client = await AmazonClient.load({ authPath });
     expect(client.isRegistered).toBe(true);
   });
 
-  it("ignores a leftover cookie file entirely", async () => {
-    await writeCookieFile();
-    // There is no cookie fallback any more. An install carrying only the old
-    // file is unconfigured and must register.
+  it("reports ENOENT when nothing is registered", async () => {
+    // There is no fallback of any kind now, so an install without a
+    // registration is unconfigured and must register.
     await expect(AmazonClient.load({ authPath })).rejects.toMatchObject({
       code: "ENOENT",
     });
