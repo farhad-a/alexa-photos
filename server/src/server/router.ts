@@ -8,11 +8,6 @@ import {
   handleListMappings,
 } from "./controllers/mappings.js";
 import {
-  handleGetCookies,
-  handleSaveCookies,
-  handleTestCookies,
-} from "./controllers/cookies.js";
-import {
   handleAmazonStatus,
   handleCancelRegistration,
   handleRefreshAmazonCookies,
@@ -72,19 +67,6 @@ export async function handleAppRequest(
 
     if (urlPath === "/api/sync" && req.method === "POST") {
       handleTriggerSync(context, res);
-      return;
-    }
-
-    if (urlPath === "/api/cookies" && req.method === "GET") {
-      await handleGetCookies(context, url, res);
-      return;
-    }
-    if (urlPath === "/api/cookies" && req.method === "POST") {
-      await handleSaveCookies(context, req, res);
-      return;
-    }
-    if (urlPath === "/api/cookies/test" && req.method === "POST") {
-      await handleTestCookies(context, res);
       return;
     }
 

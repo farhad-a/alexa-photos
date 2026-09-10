@@ -66,7 +66,6 @@ async function main() {
   const health = new AppServer({
     port: config.serverPort,
     state,
-    cookiesPath: config.amazonCookiesPath,
     amazonAuthPath: config.amazonAuthPath,
     registrationSettings: {
       authPath: config.amazonAuthPath,
@@ -85,13 +84,6 @@ async function main() {
       health.updateMetrics({
         status: authenticated ? "healthy" : "unhealthy",
         amazonAuthenticated: authenticated,
-      });
-    },
-    onCookiesSaved: async () => {
-      await sync.reloadAmazonClient();
-      health.updateMetrics({
-        status: "unhealthy",
-        amazonAuthenticated: false,
       });
     },
     isSyncRunning: () => sync.isSyncRunning(),
