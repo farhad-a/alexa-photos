@@ -1,5 +1,5 @@
 /**
- * Recognising Amazon auth cookies by name.
+ * Recognizing Amazon auth cookies by name.
  *
  * Cookies are now minted from a device registration rather than pasted by
  * hand, so nothing here parses user input any more. What remains is what the

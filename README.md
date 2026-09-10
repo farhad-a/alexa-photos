@@ -75,11 +75,6 @@ The proxy runs only during registration and is shut down afterwards.
 > remapped host port produces links the browser cannot follow. Keep the port on
 > your LAN: it proxies a live Amazon sign-in.
 
-> **Upgrading from cookie auth:** manual cookie entry has been removed. Any
-> existing `data/amazon-cookies.json` and `AMAZON_COOKIES_PATH` are ignored, and
-> the service logs a warning once if it finds either. Register a device at
-> `/amazon` and the old file can be deleted.
-
 Removing a registration in the UI only forgets the local credentials. The device
 stays listed in your Amazon account until you remove it at `amazon.com/mycd`.
 

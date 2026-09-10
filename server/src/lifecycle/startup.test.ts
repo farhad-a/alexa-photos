@@ -51,7 +51,7 @@ describe("runStartupSequence", () => {
       sync: sync as never,
       health: health as never,
       cookieRefreshIntervalMs: 60_000,
-      amazonCookiesPath: "./data/amazon-cookies.json",
+      amazonAuthPath: "./data/amazon-auth.json",
     });
 
     await Promise.resolve();
