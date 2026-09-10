@@ -13,7 +13,7 @@ export async function runStartupSequence(options: {
   sync: SyncEngine;
   health: AppServer;
   cookieRefreshIntervalMs: number;
-  amazonCookiesPath: string;
+  amazonAuthPath: string;
 }): Promise<void> {
   const {
     icloud,
@@ -21,7 +21,7 @@ export async function runStartupSequence(options: {
     sync,
     health,
     cookieRefreshIntervalMs,
-    amazonCookiesPath,
+    amazonAuthPath,
   } = options;
 
   await health.start();
@@ -83,7 +83,7 @@ export async function runStartupSequence(options: {
     amazonAuthStatus: "not_configured",
   });
   logger.info(
-    { path: amazonCookiesPath },
-    "Startup Amazon auth verification skipped until cookies are configured",
+    { path: amazonAuthPath },
+    "Startup Amazon auth verification skipped until a device is registered",
   );
 }

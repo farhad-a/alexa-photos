@@ -351,7 +351,7 @@ export class SyncEngine {
 
       if (isCookiesMissing) {
         logger.info(
-          { path: config.amazonCookiesPath },
+          { path: config.amazonAuthPath },
           "Amazon cookies are not configured yet",
         );
         this.lastAuthStatus = {

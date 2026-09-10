@@ -3,7 +3,6 @@ import { z } from "zod";
 const configSchema = z.object({
   icloudAlbumToken: z.string().min(1),
   icloudDownloadMaxRetries: z.coerce.number().default(3),
-  amazonCookiesPath: z.string().default("./data/amazon-cookies.json"),
   amazonAlbumName: z.string().default("Echo Show"),
   amazonAutoRefreshCookies: z.coerce.boolean().default(true),
 
@@ -53,7 +52,6 @@ function loadConfig(): Config {
   return configSchema.parse({
     icloudAlbumToken: process.env.ICLOUD_ALBUM_TOKEN,
     icloudDownloadMaxRetries: process.env.ICLOUD_DOWNLOAD_MAX_RETRIES,
-    amazonCookiesPath: process.env.AMAZON_COOKIES_PATH,
     amazonAlbumName: process.env.AMAZON_ALBUM_NAME,
     amazonAutoRefreshCookies: process.env.AMAZON_AUTO_REFRESH_COOKIES,
     amazonAuthPath: process.env.AMAZON_AUTH_PATH,
