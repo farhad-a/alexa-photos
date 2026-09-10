@@ -4,24 +4,35 @@ import type { SyncEngine } from "../sync/engine.js";
 
 const logger = rootLogger.child({ component: "main" });
 
+/**
+ * The timer seam, narrowed to the single way the scheduler uses it.
+ *
+ * `typeof setInterval` would drag in the whole overload set, including a DOM
+ * one returning `number`, which no test double can satisfy without casting.
+ * The real timers still satisfy these, so they remain the defaults.
+ */
+type TimerHandle = ReturnType<typeof setInterval>;
+type ScheduleFn = (callback: () => void, ms: number) => TimerHandle;
+type ClearScheduleFn = (id: TimerHandle) => void;
+
 export function createSyncScheduler(options: {
   sync: SyncEngine;
   health: AppServer;
   pollIntervalMs: number;
-  schedule?: typeof setInterval;
-  clearSchedule?: typeof clearInterval;
+  schedule?: ScheduleFn;
+  clearSchedule?: ClearScheduleFn;
 }) {
-  const {
-    sync,
-    health,
-    pollIntervalMs,
-    schedule = setInterval,
-    clearSchedule = clearInterval,
-  } = options;
+  const { sync, health, pollIntervalMs } = options;
+
+  // Annotated rather than destructured with a default: a `= setInterval`
+  // default widens the binding into a union with the overloaded global, and
+  // calling that union yields `number | Timeout` again.
+  const schedule: ScheduleFn = options.schedule ?? setInterval;
+  const clearSchedule: ClearScheduleFn = options.clearSchedule ?? clearInterval;
 
   const pollIntervalSeconds = pollIntervalMs / 1000;
   let consecutiveAuthFailures = 0;
-  let intervalId: ReturnType<typeof setInterval> | undefined;
+  let intervalId: TimerHandle | undefined;
 
   const syncHealthMetrics = (status: "healthy" | "unhealthy") => {
     const metrics = sync.getMetrics();

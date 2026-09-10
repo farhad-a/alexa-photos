@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "cd .. && tsx watch server/src/index.ts",
-    "build": "cd .. && tsc -p server/tsconfig.json",
+    "build": "cd .. && tsc -p server/tsconfig.build.json",
+    "typecheck": "cd .. && tsc -p server/tsconfig.json --noEmit",
     "start": "cd .. && node server/dist/index.js",
     "test": "cd .. && vitest --config server/vitest.config.ts",
     "test:run": "cd .. && vitest run --config server/vitest.config.ts",

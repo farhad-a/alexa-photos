@@ -16,6 +16,8 @@ const mockLogger = vi.hoisted(() => {
 });
 
 vi.mock("../lib/logger.js", () => ({ logger: mockLogger }));
+// `satisfies` makes a stale field a compile error rather than a silent
+// undefined. See the note in engine.test.ts.
 vi.mock("../lib/config.js", () => ({
   config: {
     icloudAlbumToken: "test-token",
@@ -25,7 +27,7 @@ vi.mock("../lib/config.js", () => ({
     syncDeletions: true,
     pollIntervalMs: 60000,
     logLevel: "info",
-  },
+  } satisfies Partial<(typeof import("../lib/config.js"))["config"]>,
 }));
 vi.mock("../state/store.js", () => ({
   StateStore: class {

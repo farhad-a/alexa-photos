@@ -23,11 +23,19 @@ const proxy = vi.hoisted(() => ({
 vi.mock("./registration-proxy.js", () => proxy);
 
 // Keep the pure helpers real; stub the disk.
+//
+// The writers are typed from the real exports so `mock.calls` carries the
+// actual argument types. An untyped vi.fn() infers zero arity, which makes
+// calls[0][1] untypeable and blind to a signature change.
 const store = vi.hoisted(() => ({
   readAmazonAuth: vi.fn(),
   readAmazonSession: vi.fn(),
-  writeAmazonAuth: vi.fn(async () => undefined),
-  writeAmazonSession: vi.fn(async () => undefined),
+  writeAmazonAuth: vi.fn<
+    (typeof import("./credentials.js"))["writeAmazonAuth"]
+  >(async () => undefined),
+  writeAmazonSession: vi.fn<
+    (typeof import("./credentials.js"))["writeAmazonSession"]
+  >(async () => undefined),
   clearAmazonCredentials: vi.fn(async () => undefined),
 }));
 vi.mock("./credentials.js", async (importOriginal) => ({
@@ -121,9 +129,7 @@ describe("beginRegistration", () => {
     // A registration whose refresh does not work is useless, and the user
     // must learn that now rather than in a week.
     expect(proxy.refreshRegistration).toHaveBeenCalledTimes(1);
-    const session = store.writeAmazonSession.mock.calls[0][1] as {
-      cookies: Record<string, string>;
-    };
+    const session = store.writeAmazonSession.mock.calls[0][1];
     expect(session.cookies["at-main"]).toBe("minted");
   });
 
@@ -132,9 +138,7 @@ describe("beginRegistration", () => {
     beginRegistration(SETTINGS);
     await settle();
 
-    const session = store.writeAmazonSession.mock.calls[0][1] as {
-      cookies: Record<string, string>;
-    };
+    const session = store.writeAmazonSession.mock.calls[0][1];
     expect(session.cookies["at-main"]).toBe("signin");
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.anything() }),

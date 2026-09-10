@@ -23,7 +23,13 @@ const mockLogger = vi.hoisted(() => {
 });
 vi.mock("../lib/logger.js", () => ({ logger: mockLogger }));
 
-// Mock config
+// Mock config.
+//
+// `satisfies` is what makes this a drift detector: a vi.mock factory returns
+// an unchecked object, so a field renamed or deleted in config.ts would sit
+// here unnoticed while the engine read undefined. Partial<> because supplying
+// a handful of fields is the point; excess-property checking still rejects a
+// name that no longer exists.
 vi.mock("../lib/config.js", () => ({
   config: {
     icloudAlbumToken: "test-token",
@@ -33,7 +39,7 @@ vi.mock("../lib/config.js", () => ({
     syncDeletions: true,
     pollIntervalMs: 60000,
     logLevel: "info",
-  },
+  } satisfies Partial<(typeof import("../lib/config.js"))["config"]>,
 }));
 
 // Mock StateStore with in-memory implementation

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
-import { StateStore, PhotoMapping } from "./store.js";
+import { StateStore } from "./store.js";
 
 // Mock the logger
 const mockLogger = vi.hoisted(() => {
@@ -16,9 +15,15 @@ const mockLogger = vi.hoisted(() => {
 });
 vi.mock("../lib/logger.js", () => ({ logger: mockLogger }));
 
-// Override DB_PATH to use in-memory database
+// Override DB_PATH to use in-memory database.
+//
+// better-sqlite3 is `export = Database`, so `typeof import("better-sqlite3")`
+// is the constructor itself and has no `.default`. ESM interop does supply one
+// at runtime, so describe what interop actually hands back rather than casting.
 vi.mock("better-sqlite3", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("better-sqlite3")>();
+  const mod = await importOriginal<{
+    default: typeof import("better-sqlite3");
+  }>();
   return {
     default: class extends mod.default {
       constructor() {
