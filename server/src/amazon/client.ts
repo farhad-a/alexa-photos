@@ -8,7 +8,7 @@ import {
   extractTrackedSetCookies,
   isAccessTokenCookieName,
   isTrackedAuthCookieName,
-} from "./cookies.js";
+} from "./cookie-names.js";
 import {
   ProviderErrorStatus,
   classifyAmazonAuthError,
