@@ -12,9 +12,9 @@
     "format:check": "prettier --check \"src/**/*.(ts|tsx|css)\""
   },
   "dependencies": {
-    "react": "^19.3.0",
+    "react": "^19.3.1",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
